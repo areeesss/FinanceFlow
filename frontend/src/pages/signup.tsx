@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import image from "@/assets/imgs/halfbg.webp";
@@ -6,108 +6,96 @@ import logo from "@/assets/imgs/Financelogo.webp";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Eye, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
-const SignUpPage: React.FC = () => {
+const SignUpPage = () => {
   const navigate = useNavigate();
-  const [password, setPassword] = useState<string>("");
-  const [confirmPassword, setConfirmPassword] = useState<string>("");
-  const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [passwordMatch, setPasswordMatch] = useState<boolean>(true);
-  const [email, setEmail] = useState<string>("");
-  const [emailValid, setEmailValid] = useState<boolean>(true);
-  const [fullName, setFullName] = useState<string>("");
-  const [username, setUsername] = useState<string>("");
-  const [error, setError] = useState<string>("");
+  const { register } = useAuth();
+  const [formData, setFormData] = useState({
+    full_name: "",
+    email: "",
+    username: "",
+    password: "",
+    password2: ""
+  });
+  const [errors, setErrors] = useState({
+    full_name: false,
+    email: false,
+    username: false,
+    passwordMatch: false,
+    apiError: ""
+  });
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordError, setShowPasswordError] = useState(false);
 
+  // Real-time password validation
   useEffect(() => {
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = "auto";
+    if (formData.password && formData.password2) {
+      const passwordsMatch = formData.password === formData.password2;
+      setErrors(prev => ({
+        ...prev,
+        passwordMatch: !passwordsMatch
+      }));
+      setShowPasswordError(!passwordsMatch);
+    } else {
+      setShowPasswordError(false);
+    }
+  }, [formData.password, formData.password2]);
+
+  const validateForm = () => {
+    const newErrors = {
+      full_name: formData.full_name.trim() === "",
+      email: !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email),
+      username: formData.username.trim() === "",
+      passwordMatch: formData.password !== formData.password2,
+      apiError: ""
     };
-  }, []);
-
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
+    setErrors(newErrors);
+    return !Object.values(newErrors).some(Boolean);
   };
 
-  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPassword(e.target.value);
-    setPasswordMatch(e.target.value === confirmPassword);
-  };
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
 
-  const handleConfirmPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setConfirmPassword(e.target.value);
-    setPasswordMatch(password === e.target.value);
-  };
-
-  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setEmail(e.target.value);
-    setEmailValid(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.target.value));
-  };
-
-  const getCsrfToken = () => {
-    const cookieValue = document.cookie
-      .split('; ')
-      .find(row => row.startsWith('csrftoken='))
-      ?.split('=')[1];
-    return cookieValue;
-  };
-
-  const handleSignUp = async () => {
-    // Validate form data
-    if (!fullName || !email || !username || !password || !confirmPassword) {
-      setError("All fields are required.");
-      return;
+    if (name !== "password" && name !== "password2") {
+      setErrors(prev => ({
+        ...prev,
+        [name]: name === "email" 
+          ? !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) 
+          : value.trim() === ""
+      }));
     }
+  };
 
-    if (!emailValid) {
-      setError("Invalid email format.");
-      return;
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
 
-    if (!passwordMatch) {
-      setError("Passwords do not match.");
-      return;
-    }
-
-    // Prepare the data to send to the backend
-    const userData = {
-      full_name: fullName,
-      email: email,
-      username: username,
-      password: password,
-    };
+    setLoading(true);
+    setErrors(prev => ({ ...prev, apiError: "" }));
 
     try {
-      // Get the CSRF token
-      const csrfToken = getCsrfToken();
-      if (!csrfToken) {
-        throw new Error("CSRF token not found");
-      }
-
-      // Send a POST request to the backend
-      const response = await fetch("http://localhost:8000/api/register/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": csrfToken, // Include the CSRF token in the headers
-        },
-        body: JSON.stringify(userData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to register");
-      }
-
-      const data = await response.json();
-      console.log("Registration successful:", data);
-
-      // Redirect to login page after successful registration
-      navigate("/login");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An unexpected error occurred");
+      await register(
+        formData.full_name, 
+        formData.email, 
+        formData.username, 
+        formData.password,
+        formData.password2
+      );
+      navigate("/login", { state: { signupSuccess: true, email: formData.email } });
+    } catch (error) {
+      setErrors(prev => ({
+        ...prev,
+        apiError: error instanceof Error ? error.message : "Registration failed"
+      }));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -118,117 +106,160 @@ const SignUpPage: React.FC = () => {
       transition={{ duration: 1, ease: "easeOut" }}
       className="bg-[#f8f9fa] flex flex-col md:flex-row w-full h-screen overflow-hidden"
     >
+      {/* Left Section (Signup Form) */}
       <Card className="w-full md:w-1/3 bg-[#dce4f2] flex flex-col relative h-full md:shadow-lg">
         <div className="absolute inset-0 md:hidden">
           <img src={image} className="w-full h-full object-cover opacity-20" />
         </div>
 
         <CardContent className="flex flex-col items-center justify-center flex-grow px-6 sm:px-10 relative z-10">
+          {/* Logo */}
           <div className="absolute top-4 left-4 sm:top-6 sm:left-6">
-            <img src={logo} className="w-[90px] sm:w-[130px] h-auto" />
+            <img src={logo} className="w-[90px] sm:w-[130px] h-auto" alt="Logo" />
           </div>
 
           <div className="w-full max-w-[400px]">
-            <div className="text-center mb-5">
-              <h1 className="text-3xl sm:text-[45px] font-bold text-[#020202] tracking-wide">
-                Create Account
+            <div className="text-center mb-6">
+              <h1 className="text-4xl sm:text-[55px] font-bold text-[#020202] tracking-wide">
+                CREATE ACCOUNT
               </h1>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-black text-base">Full Name</label>
-              <Input
-                className="h-[50px] bg-[#f4f2f2] rounded-lg w-full"
-                placeholder="Enter full name"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-              />
+            {errors.apiError && (
+              <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-center">
+                {errors.apiError}
+              </div>
+            )}
 
-              <label className="text-black text-base">Email</label>
-              <Input
-                className="h-[50px] bg-[#f4f2f2] rounded-lg w-full"
-                placeholder="Enter email"
-                value={email}
-                onChange={handleEmailChange}
-              />
-              {!emailValid && (
-                <p className="text-red-500 text-sm">Invalid email format</p>
-              )}
-
-              <label className="text-black text-base">Username</label>
-              <Input
-                className="h-[50px] bg-[#f4f2f2] rounded-lg w-full"
-                placeholder="Enter username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-
-              <label className="text-black text-base">Password</label>
-              <div className="relative">
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Full Name Input */}
+              <div className="space-y-2">
+                <label className="text-black text-base">Full Name</label>
                 <Input
-                  type={showPassword ? "text" : "password"}
-                  className="h-[50px] bg-[#f4f2f2] rounded-lg w-full"
-                  placeholder="Enter password"
-                  value={password}
-                  onChange={handlePasswordChange}
+                  name="full_name"
+                  className="h-[52px] bg-[#f4f2f2] rounded-lg w-full"
+                  placeholder="Enter full name"
+                  value={formData.full_name}
+                  onChange={handleChange}
                 />
-                <Eye
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-[22px] h-5 opacity-50 text-[#18345e] cursor-pointer"
-                  onClick={togglePasswordVisibility}
-                />
+                {errors.full_name && <p className="text-red-500 text-sm">Name is required</p>}
               </div>
 
-              <label className="text-black text-base">Confirm Password</label>
-              <div className="relative">
+              {/* Email Input */}
+              <div className="space-y-2">
+                <label className="text-black text-base">Email</label>
                 <Input
-                  type={showPassword ? "text" : "password"}
-                  className="h-[50px] bg-[#f4f2f2] rounded-lg w-full"
-                  placeholder="Re-enter password"
-                  value={confirmPassword}
-                  onChange={handleConfirmPasswordChange}
+                  name="email"
+                  className="h-[52px] bg-[#f4f2f2] rounded-lg w-full"
+                  placeholder="Enter email"
+                  value={formData.email}
+                  onChange={handleChange}
                 />
-                <Eye
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-[22px] h-5 opacity-50 text-[#18345e] cursor-pointer"
-                  onClick={togglePasswordVisibility}
-                />
+                {errors.email && <p className="text-red-500 text-sm">Invalid email format</p>}
               </div>
-              {!passwordMatch && (
-                <p className="text-red-500 text-sm flex items-center">
-                  <AlertCircle className="w-4 h-4 mr-1" /> Passwords do not
-                  match
-                </p>
-              )}
 
-              {error && (
-                <p className="text-red-500 text-sm flex items-center">
-                  <AlertCircle className="w-4 h-4 mr-1" /> {error}
-                </p>
-              )}
+              {/* Username Input */}
+              <div className="space-y-2">
+                <label className="text-black text-base">Username</label>
+                <Input
+                  name="username"
+                  className="h-[52px] bg-[#f4f2f2] rounded-lg w-full"
+                  placeholder="Enter username"
+                  value={formData.username}
+                  onChange={handleChange}
+                />
+                {errors.username && <p className="text-red-500 text-sm">Username is required</p>}
+              </div>
 
+              {/* Password Input */}
+              <div className="space-y-2">
+                <label className="text-black text-base">Password</label>
+                <div className="relative">
+                  <Input
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    className="h-[52px] bg-[#f4f2f2] rounded-lg w-full pr-10"
+                    placeholder="Enter password"
+                    value={formData.password}
+                    onChange={handleChange}
+                  />
+                  {showPassword ? (
+                    <EyeOff
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-[25px] h-5 opacity-50 text-[#18345e] cursor-pointer"
+                      onClick={() => setShowPassword(false)}
+                    />
+                  ) : (
+                    <Eye
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-[25px] h-5 opacity-50 text-[#18345e] cursor-pointer"
+                      onClick={() => setShowPassword(true)}
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Confirm Password Input */}
+              <div className="space-y-2">
+                <label className="text-black text-base">Confirm Password</label>
+                <div className="relative">
+                  <Input
+                    name="password2"
+                    type={showPassword ? "text" : "password"}
+                    className="h-[52px] bg-[#f4f2f2] rounded-lg w-full pr-10"
+                    placeholder="Confirm password"
+                    value={formData.password2}
+                    onChange={handleChange}
+                  />
+                  {showPassword ? (
+                    <EyeOff
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-[25px] h-5 opacity-50 text-[#18345e] cursor-pointer"
+                      onClick={() => setShowPassword(false)}
+                    />
+                  ) : (
+                    <Eye
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-[25px] h-5 opacity-50 text-[#18345e] cursor-pointer"
+                      onClick={() => setShowPassword(true)}
+                    />
+                  )}
+                </div>
+                {showPasswordError && (
+                  <p className="text-red-500 text-sm flex items-center">
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    Passwords do not match
+                  </p>
+                )}
+              </div>
+
+              {/* Signup Button */}
               <Button
-                className="w-full h-[50px] bg-[#a9b5df] hover:bg-[#98a6d7] text-[#2d346b] text-lg shadow-lg rounded-lg"
-                onClick={handleSignUp}
+                className="w-full h-[51px] bg-[#a9b5df] hover:bg-[#98a6d7] text-[#2d346b] text-lg shadow-lg rounded-lg"
+                disabled={loading}
+                type="submit"
               >
-                Sign Up
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : "Sign Up"}
               </Button>
+            </form>
 
-              <p className="text-center text-lg">
-                <span className="text-[#2d346b]">
-                  Already have an account?{" "}
-                </span>
-                <Button
-                  variant="link"
-                  className="text-[#2d346b] p-0"
-                  onClick={() => navigate("/login")}
-                >
-                  Log In
-                </Button>
-              </p>
-            </div>
+            {/* Login Link */}
+            <p className="text-center text-lg mt-3">
+              <span className="text-[#2d346b]">Already have an account? </span>
+              <Button
+                variant="link"
+                className="text-[#2d346b] p-0"
+                onClick={() => navigate("/login")}
+              >
+                Log In
+              </Button>
+            </p>
           </div>
         </CardContent>
       </Card>
 
+      {/* Right Section (Hidden on Mobile) */}
       <div className="hidden md:block w-2/3 h-full">
         <img
           src={image}

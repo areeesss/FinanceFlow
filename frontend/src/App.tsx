@@ -1,6 +1,6 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import Homepage from "./pages/homepage";
-import LoginPage from "./pages/login";
+import Login from "./pages/login";
 import Signup from "./pages/signup";
 import GmailLogin from "./pages/gmail";
 import ForgotPassword from "./pages/forgotpassword";
@@ -12,65 +12,63 @@ import Income from "./pages/income";
 import Expenses from "./pages/expenses";
 import FinanceGoal from "./pages/financegoal";
 import Budgets from "./pages/budgets";
-import ProtectedRoute from "./components/common/ProtectedRoute";
+import ProtectedRoute from "./components/common/ProtectedRoute"; // Import ProtectedRoute
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<Homepage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/gmail" element={<GmailLogin />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/verify-code" element={<VerifyCode />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/aboutus" element={<AboutUs />} />
+    <Routes>
+      {/* Public Routes */}
+      <Route path="/" element={<Homepage />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
+      <Route path="/gmail" element={<GmailLogin />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/verify-code" element={<VerifyCode />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/aboutus" element={<AboutUs />} />
 
-        {/* Protected Routes */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/income"
-          element={
-            <ProtectedRoute>
-              <Income />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/expenses"
-          element={
-            <ProtectedRoute>
-              <Expenses />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/financegoal"
-          element={
-            <ProtectedRoute>
-              <FinanceGoal />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/budgets"
-          element={
-            <ProtectedRoute>
-              <Budgets />
-            </ProtectedRoute>
-          }
-        />
-      </Routes>
-    </Router>
+      {/* Protected Routes */}
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/income"
+        element={
+          <ProtectedRoute>
+            <Income />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/expenses"
+        element={
+          <ProtectedRoute>
+            <Expenses />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/financegoal"
+        element={
+          <ProtectedRoute>
+            <FinanceGoal />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/budgets"
+        element={
+          <ProtectedRoute>
+            <Budgets />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
   );
 }
 

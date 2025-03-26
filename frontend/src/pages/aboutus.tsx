@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Home,
   Wallet,
@@ -45,9 +45,23 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { LucideIcon } from "lucide-react";
+
+// Define TypeScript interface for NavItem props
+interface NavItemProps {
+  icon: LucideIcon;
+  label: string;
+  active?: boolean;
+  isSidebarOpen: boolean;
+}
 
 const AboutUs = () => {
-  const NavItem = ({ icon: Icon, label, active, isSidebarOpen }) => (
+  const NavItem = ({
+    icon: Icon,
+    label,
+    active = false,
+    isSidebarOpen,
+  }: NavItemProps) => (
     <div
       className={`group relative flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all ${
         active ? "text-indigo-900 font-medium" : "text-gray-400"
@@ -72,14 +86,26 @@ const AboutUs = () => {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Default closed on mobile
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+
+  // Check for mobile screen size
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    // Initial check
+    checkIfMobile();
+
+    // Add event listener
+    window.addEventListener("resize", checkIfMobile);
+
+    // Cleanup
+    return () => window.removeEventListener("resize", checkIfMobile);
+  }, []);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
-  };
-
-  const handleLogout = () => {
-    console.log("User logged out");
-    // Add actual logout logic here (e.g., clear auth token, redirect to login)
   };
 
   const [fullName, setFullName] = useState("Test User");
@@ -89,6 +115,7 @@ const AboutUs = () => {
   const [openPopover, setOpenPopover] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <div className="flex h-screen bg-indigo-100 overflow-hidden">
@@ -116,20 +143,41 @@ const AboutUs = () => {
             <NavItem
               icon={Home}
               label="Dashboard"
+              active={false}
               isSidebarOpen={true} // Always show labels in sidebar
             />
           </Link>
           <Link to="/income">
-            <NavItem icon={Wallet} label="Income" isSidebarOpen={true} />
+            <NavItem
+              icon={Wallet}
+              label="Income"
+              active={false}
+              isSidebarOpen={true}
+            />
           </Link>
           <Link to="/expenses">
-            <NavItem icon={CreditCard} label="Expenses" isSidebarOpen={true} />
+            <NavItem
+              icon={CreditCard}
+              label="Expenses"
+              active={false}
+              isSidebarOpen={true}
+            />
           </Link>
           <Link to="/financegoal">
-            <NavItem icon={Goal} label="Goals" isSidebarOpen={true} />
+            <NavItem
+              icon={Goal}
+              label="Goals"
+              active={false}
+              isSidebarOpen={true}
+            />
           </Link>
           <Link to="/budgets">
-            <NavItem icon={List} label="Budgets" isSidebarOpen={true} />
+            <NavItem
+              icon={List}
+              label="Budgets"
+              active={false}
+              isSidebarOpen={true}
+            />
           </Link>
         </nav>
       </aside>
@@ -157,7 +205,6 @@ const AboutUs = () => {
                   About Us
                 </button>
               </Link>
-              {/* Avatar with Dropdown */}
               {/* Avatar with Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -189,29 +236,30 @@ const AboutUs = () => {
                       </DropdownMenuItem>
                     </PopoverTrigger>
                     <PopoverContent
-                      side="right"
-                      align="start"
-                      className="w-80 p-4 bg-white shadow-lg rounded-md"
+                      side={isMobile ? "bottom" : "right"}
+                      align={isMobile ? "center" : "start"}
+                      className="w-[60vw] max-w-xs sm:max-w-sm md:w-80 p-3 sm:p-4 bg-white shadow-lg rounded-md"
+                      sideOffset={isMobile ? 5 : 10}
                     >
-                      {/* ✅ Section: Personal Information */}
-                      <h2 className="text-xl font-semibold">
+                      {/* Personal Information */}
+                      <h2 className="text-lg sm:text-xl font-semibold">
                         Personal Information
                       </h2>
-                      <div className="relative mt-2 p-4 rounded-lg border bg-gray-100">
-                        {/* ✅ Toggle between Settings and Save button */}
+                      <div className="relative mt-2 p-3 sm:p-4 pb-2 rounded-lg border bg-gray-100">
+                        {/* Toggle button - with more space below content */}
                         <button
-                          className="absolute bottom-3 right-2 text-gray-600 hover:text-gray-800"
+                          className="absolute bottom-2 right-2 text-gray-600 hover:text-gray-800"
                           onClick={() => setIsEditing(!isEditing)}
                         >
                           {isEditing ? (
-                            <Save className="w-5 h-5" />
+                            <Save className="w-4 h-4 sm:w-5 sm:h-5" />
                           ) : (
-                            <Settings className="w-5 h-5" />
+                            <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
                           )}
                         </button>
 
-                        <div className="flex items-center space-x-3">
-                          <Avatar className="h-16 w-16">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 space-y-2 sm:space-y-0">
+                          <Avatar className="h-12 w-12 sm:h-16 sm:w-16 flex-shrink-0">
                             <img
                               src={userimg}
                               alt="User"
@@ -219,50 +267,56 @@ const AboutUs = () => {
                             />
                           </Avatar>
 
-                          <div className="w-full">
-                            {isEditing ? ( // ✅ If in edit mode, show input fields
-                              <>
+                          <div className="w-full overflow-hidden">
+                            {isEditing ? (
+                              <div className="flex flex-col space-y-2 mb-6">
                                 <input
                                   type="text"
-                                  className="w-40 px-2 py-1 border rounded-md"
+                                  className="w-full px-2 py-1 text-sm sm:text-base border rounded-md"
                                   value={fullName}
                                   onChange={(e) => setFullName(e.target.value)}
+                                  placeholder="Full Name"
                                 />
                                 <input
                                   type="email"
-                                  className="w-40 mt-2 px-2 py-1 border rounded-md"
+                                  className="w-full px-2 py-1 text-sm sm:text-base border rounded-md"
                                   value={email}
                                   onChange={(e) => setEmail(e.target.value)}
+                                  placeholder="Email"
                                 />
                                 <input
                                   type="text"
-                                  className="w-40 mt-2 px-2 py-1 border rounded-md"
+                                  className="w-full px-2 py-1 text-sm sm:text-base border rounded-md"
                                   value={username}
                                   onChange={(e) => setUsername(e.target.value)}
+                                  placeholder="Username"
                                 />
-                              </>
+                              </div>
                             ) : (
-                              // ✅ Otherwise, display text
-                              <>
-                                <p className="text-lg font-bold">{fullName}</p>
-                                <p className="text-sm text-gray-600">{email}</p>
-                                <p className="text-sm text-gray-600">
+                              <div className="overflow-hidden">
+                                <p className="text-base sm:text-lg font-bold truncate">
+                                  {fullName}
+                                </p>
+                                <p className="text-xs sm:text-sm text-gray-600 truncate">
+                                  {email}
+                                </p>
+                                <p className="text-xs sm:text-sm text-gray-600 truncate">
                                   Username: {username}
                                 </p>
-                              </>
+                              </div>
                             )}
                           </div>
                         </div>
                       </div>
 
-                      {/* ✅ Section: Notification Settings */}
-                      <div className="mt-4 p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
-                        <div>
-                          <h3 className="text-md font-semibold">
+                      {/* Notification Settings */}
+                      <div className="mt-3 sm:mt-4 p-3 sm:p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
+                        <div className="flex-1 pr-2">
+                          <h3 className="text-sm sm:text-md font-semibold">
                             Notification Settings
                           </h3>
-                          <p className="text-sm text-gray-600">
-                            Manage how you receive alerts and notifications
+                          <p className="text-xs sm:text-sm text-gray-600">
+                            Manage how you receive alerts
                           </p>
                         </div>
                         <Switch
@@ -271,14 +325,14 @@ const AboutUs = () => {
                         />
                       </div>
 
-                      {/* ✅ Section: Email Notifications */}
-                      <div className="mt-2 p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
-                        <div>
-                          <h3 className="text-md font-semibold">
+                      {/* Email Notifications */}
+                      <div className="mt-2 p-3 sm:p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
+                        <div className="flex-1 pr-2">
+                          <h3 className="text-sm sm:text-md font-semibold">
                             Email Notifications
                           </h3>
-                          <p className="text-sm text-gray-600">
-                            Receive weekly summaries and important alerts
+                          <p className="text-xs sm:text-sm text-gray-600">
+                            Weekly summaries and alerts
                           </p>
                         </div>
                         <Switch
@@ -321,7 +375,7 @@ const AboutUs = () => {
                 </AlertDialogCancel>
                 <AlertDialogAction
                   className="bg-indigo-100 hover:bg-indigo-300 text-black"
-                  onClick={handleLogout}
+                  onClick={() => navigate("/login")}
                 >
                   Log Out
                 </AlertDialogAction>
@@ -339,10 +393,10 @@ const AboutUs = () => {
               {/* Adds a dark overlay */}
               <div className="container mx-auto px-4 py-20 relative">
                 <div className="max-w-3xl mx-auto text-center fade-in">
-                  <h1 className="text-4xl md:text-5xl font-bold mb-6">
+                  <h1 className="text-base md:text-5xl font-bold mb-6">
                     Welcome to FinanceFlow!
                   </h1>
-                  <p className="text-lg md:text-xl opacity-90 text-justify">
+                  <p className="text-base md:text-xl opacity-90 text-justify">
                     At FinanceFlow, we believe that managing your personal
                     finances should be straightforward, empowering, and
                     accessible to everyone. Our mission is to help individuals
@@ -360,26 +414,28 @@ const AboutUs = () => {
                 <div className="max-w-3xl mx-auto slide-up">
                   <div className="flex items-center gap-2 mb-6">
                     <Users className="h-6 w-6 text-primary" />
-                    <h2 className="text-3xl font-bold">Our Story</h2>
+                    <h2 className="text-base md:text-3xl font-bold">
+                      Our Story
+                    </h2>
                   </div>
-                  <p className="text-gray-700 text-lg leading-relaxed text-justify">
+                  <p className="text-gray-700 text-base md-text-lg leading-relaxed text-justify">
                     FinanceFlow was born out of a simple yet powerful idea: to
                     help individuals and businesses gain control over their
                     finances with ease. We realized that many people struggle
                     with budgeting, tracking expenses, and making informed
                     financial decisions.
                   </p>
-                  <p className="mt-4 text-gray-700 text-lg leading-relaxed text-justify">
+                  <p className="mt-4 text-gray-700 text-base md-text-lg leading-relaxed text-justify">
                     Our journey began with a passion for financial literacy and
                     technology. We assembled a team of experts in finance and
                     software development to create an intuitive platform that
                     simplifies financial management for everyone.
                   </p>
-                  <p className="mt-4 text-gray-700 text-lg leading-relaxed text-justify">
-                    Since our launch, we’ve been committed to continuous
+                  <p className="mt-4 text-gray-700 text-base md-text-lg leading-relaxed text-justify">
+                    Since our launch, we've been committed to continuous
                     innovation. We listen to our users, adapt to their needs,
                     and refine our platform to provide the best possible
-                    experience. Our story is just beginning, and we’re excited
+                    experience. Our story is just beginning, and we're excited
                     to be part of your financial journey.
                   </p>
                 </div>
@@ -392,22 +448,24 @@ const AboutUs = () => {
                 <div className="max-w-3xl mx-auto slide-up">
                   <div className="flex items-center gap-2 mb-6">
                     <Target className="h-6 w-6 text-primary" />
-                    <h2 className="text-3xl font-bold">Our Mission</h2>
+                    <h2 className="text-base md:text-3xl font-bold">
+                      Our Mission
+                    </h2>
                   </div>
-                  <p className="text-gray-700 text-lg leading-relaxed text-justify">
+                  <p className="text-gray-700 text-base md-text-lg leading-relaxed text-justify">
                     At FinanceFlow, our mission is to empower you to take charge
                     of your finances. We strive to provide you with the tools
                     and resources you need to make informed financial decisions,
                     set achievable goals, and ultimately achieve financial
                     freedom.
                   </p>
-                  <p className="mt-4 text-gray-700 text-lg leading-relaxed text-justify">
+                  <p className="mt-4 text-gray-700 text-base md-text-lg leading-relaxed text-justify">
                     We believe that everyone deserves the opportunity to build a
-                    secure financial future. That’s why we are committed to
+                    secure financial future. That's why we are committed to
                     delivering a user-friendly, educational, and intuitive
                     platform that simplifies personal finance management.
                   </p>
-                  <p className="mt-4 text-gray-700 text-lg leading-relaxed text-justify">
+                  <p className="mt-4 text-gray-700 text-base md-text-lg leading-relaxed text-justify">
                     Our goal is not just to track your finances but to educate
                     and guide you toward smarter money habits, better
                     investments, and long-term financial stability. We are here
@@ -423,9 +481,11 @@ const AboutUs = () => {
                 <div className="max-w-3xl mx-auto slide-up">
                   <div className="flex items-center gap-2 mb-6">
                     <Eye className="h-6 w-6 text-primary" />
-                    <h2 className="text-3xl font-bold">Our Vision</h2>
+                    <h2 className="text-base md:text-3xl font-bold">
+                      Our Vision
+                    </h2>
                   </div>
-                  <p className="text-gray-600 text-lg leading-relaxed text-justify">
+                  <p className="text-gray-600 text-base md-text-lg leading-relaxed text-justify">
                     We prioritize simplicity by offering a user-friendly design
                     and straightforward features that make finance tracking
                     accessible to everyone. Transparency is at the core of our
@@ -445,10 +505,10 @@ const AboutUs = () => {
             <section className="py-20  bg-gray-50">
               <div className="container mx-auto px-4">
                 <div className="max-w-3xl mx-auto slide-up">
-                  <h2 className="text-3xl font-bold text-center mb-4">
+                  <h2 className="text-base md:text-3xl font-bold text-center mb-4">
                     Meet Our Team
                   </h2>
-                  <p className="text-gray-600 text-lg leading-relaxed text-center text-justify mb-10">
+                  <p className="text-gray-600 text-base md-text-lg leading-relaxed text-justify mb-10">
                     Our dedicated team of finance enthusiasts, developers, and
                     customer support specialists is passionate about helping you
                     succeed. We are committed to continuously improving our
@@ -464,10 +524,10 @@ const AboutUs = () => {
                       alt="Team Member"
                       className="w-full h-60 object-cover rounded-lg mb-4"
                     />
-                    <h3 className="text-xl text-center font-semibold mb-2">
+                    <h3 className="text-base md:text-xl text-center font-semibold mb-2">
                       Gil John Rey Naldoza
                     </h3>
-                    <p className="text-center text-indigo-500">
+                    <p className="text-base md:text-xl text-center text-indigo-500">
                       UI/UX Designer
                     </p>
                   </Card>
@@ -478,10 +538,10 @@ const AboutUs = () => {
                       alt="Team Member"
                       className="w-full h-60 object-cover rounded-lg mb-4"
                     />
-                    <h3 className="text-xl text-center font-semibold mb-2">
+                    <h3 className="text-base md:text-xl text-center font-semibold mb-2">
                       Vin Marcus Gerebise
                     </h3>
-                    <p className="text-center text-indigo-500">
+                    <p className="text-base md:text-xl text-center text-indigo-500">
                       Backend and Frontend Logic Programmer
                     </p>
                   </Card>
@@ -492,10 +552,10 @@ const AboutUs = () => {
                       alt="Team Member"
                       className="w-full h-60 object-cover rounded-lg mb-4"
                     />
-                    <h3 className="text-xl text-center font-semibold mb-2">
+                    <h3 className="text-base md:text-xl  text-center font-semibold mb-2">
                       Heart Chiong
                     </h3>
-                    <p className=" text-center text-indigo-500">
+                    <p className="text-base md:text-xl  text-center text-indigo-500">
                       Frontend Logic and Frontend Design Programmer
                     </p>
                   </Card>
@@ -508,31 +568,38 @@ const AboutUs = () => {
               <div className="container mx-auto px-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
                   <div>
-                    <h3 className="font-bold text-lg mb-4">FinanceFlow</h3>
+                    <h3 className="font-bold text-base md:text-lg mb-4">
+                      FinanceFlow
+                    </h3>
                     <p className="text-white">Keep Your Finances</p>
                     <p>Flowing Smoothly</p>
                   </div>
                   <div>
-                    <h3 className="font-bold text-lg mb-4">Quick Links</h3>
+                    <h3 className="font-bold text-base md:text-lg mb-4">
+                      Quick Links
+                    </h3>
                     <ul className="space-y-2 text-white">
                       <li>Dashboard</li>
                       <li>About Us</li>
-                      <li>Privacy & Terms</li>
                     </ul>
                   </div>
                   <div>
-                    <h3 className="font-bold text-lg mb-4">Contact Us</h3>
+                    <h3 className="font-bold text-base md:text-lg mb-4">
+                      Contact Us
+                    </h3>
                     <p className="text-white">info@FinanceFlow.com</p>
                     <p className="text-white">(+63) 9363 6327 333</p>
                   </div>
                   <div>
-                    <h3 className="font-bold text-lg mb-4">Follow Us</h3>
+                    <h3 className="font-bold text-base md:text-lg mb-4">
+                      Follow Us
+                    </h3>
                     <p className="text-white">Instagram</p>
                     <p className="text-white">Facebook</p>
                   </div>
                 </div>
                 <Separator className="my-8 bg-gray-800" />
-                <p className="text-center text-gray-400 text-sm">
+                <p className="text-center text-gray-400 text-base md:text-sm">
                   © {new Date().getFullYear()} Financial Expert. All rights
                   reserved.
                 </p>

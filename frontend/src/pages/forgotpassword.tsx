@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import image from "@/assets/imgs/halfbg.webp";
 import logo from "@/assets/imgs/Financelogo.webp";
@@ -70,7 +70,7 @@ const ForgotPassword = () => {
             </div>
 
             <div className="space-y-5">
-              <p className="text-center text-justify text-sm text-gray-700 mb-4">
+              <p className="text-justify text-sm text-gray-700 mb-4">
                 We will send a verification code to the email provided so you
                 can reset your password.
               </p>

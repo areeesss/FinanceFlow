@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useAuth } from "@/context/AuthContext";
+import { LoadingSpinner } from "@/components/common/LoadingSpinner";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Home,
   Wallet,
@@ -47,17 +49,37 @@ import {
   CartesianGrid,
 } from "recharts";
 
+// Define types for the data structure
+interface ChartData {
+  day: string;
+  income: number;
+  expenses: number;
+}
+
 // Sample data for Income vs Expenses chart
-const data = [
-  { day: "Mon", income: 3000, expenses: 2000 },
-  { day: "Tue", income: 2500, expenses: 2200 },
-  { day: "Wed", income: 7000, expenses: 5000 },
-  { day: "Thur", income: 4000, expenses: 3500 },
-  { day: "Fri", income: 4500, expenses: 4000 },
-  { day: "Sat", income: 5000, expenses: 4500 },
+const data: ChartData[] = [
+  { day: "Oct", income: 10000, expenses: 8342 },
+  { day: "Nov", income: 8746, expenses: 4328 },
+  { day: "Dec", income: 9342, expenses: 8828 },
+  { day: "Jan", income: 11735, expenses: 11314 },
+  { day: "Feb", income: 15000, expenses: 12984 },
+  { day: "Mar", income: 16500, expenses: 4965 },
 ];
 
-const NavItem = ({ icon: Icon, label, active = false, isSidebarOpen }: { icon: any; label: string; active?: boolean; isSidebarOpen: boolean }) => (
+// Define prop types for the NavItem component
+interface NavItemProps {
+  icon: React.ElementType;
+  label: string;
+  active?: boolean;
+  isSidebarOpen: boolean;
+}
+
+const NavItem: React.FC<NavItemProps> = ({
+  icon: Icon,
+  label,
+  active,
+  isSidebarOpen,
+}) => (
   <div
     className={`group relative flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all ${
       active ? "text-indigo-900 font-medium" : "text-gray-400"
@@ -78,9 +100,20 @@ const NavItem = ({ icon: Icon, label, active = false, isSidebarOpen }: { icon: a
       </span>
     )}
   </div>
-);
 
-const StatCard = ({ title, amount }: { title: string; amount: string }) => (
+);
+const handleLogout = async () => {
+  await logout();
+  navigate('/login');
+};
+
+// Define prop types for the StatCard component
+interface StatCardProps {
+  title: string;
+  amount: string;
+}
+
+const StatCard: React.FC<StatCardProps> = ({ title, amount }) => (
   <Card className="p-4 bg-white shadow-lg rounded-2xl">
     <CardContent className="text-center">
       <h2 className="text-lg font-semibold text-gray-700">{title}</h2>
@@ -89,30 +122,46 @@ const StatCard = ({ title, amount }: { title: string; amount: string }) => (
   </Card>
 );
 
-const Dashboard = () => {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Default closed on mobile
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+const Dashboard: React.FC = () => {
+  const { user, loading, logout } = useAuth();
+  const navigate = useNavigate();
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false); // Default closed on mobile
+  const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
 
-  const toggleSidebar = () => {
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/login');
+    }
+  }, [user, loading, navigate]);
+  // Check for mobile screen size
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkIfMobile();
+    window.addEventListener("resize", checkIfMobile);
+    return () => window.removeEventListener("resize", checkIfMobile);
+  }, []);
+
+  const toggleSidebar = (): void => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-const handleLogout = () => {
-  // Clear authentication token or state
-  localStorage.removeItem("authToken"); // Example for clearing token
-  // Redirect to login page
-  window.location.href = "/login"; // Adjust the path as necessary
-};
+  const [fullName, setFullName] = useState<string>("Test User");
+  const [email, setEmail] = useState<string>("test@example.com");
+  const [username, setUsername] = useState<string>("TestUser");
+  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [openPopover, setOpenPopover] = useState<boolean>(false);
+  const [emailNotifications, setEmailNotifications] = useState<boolean>(false);
+  const [notificationsEnabled, setNotificationsEnabled] =
+    useState<boolean>(false);
+  const navigate = useNavigate();
 
-
-  const [fullName, setFullName] = useState("Test User");
-  const [email, setEmail] = useState("test@example.com");
-  const [username, setUsername] = useState("TestUser");
-  const [isEditing, setIsEditing] = useState(false);
-  const [openPopover, setOpenPopover] = useState(false);
-  const [emailNotifications, setEmailNotifications] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-
+  if (loading || !user) {
+    return <LoadingSpinner />;
+  }
+  
   return (
     <div className="flex h-screen bg-indigo-100 overflow-hidden">
       {/* Sidebar */}
@@ -136,25 +185,24 @@ const handleLogout = () => {
         {/* Sidebar Navigation */}
         <nav className="mt-6 space-y-2">
           <Link to="/dashboard">
-<NavItem
-  icon={Home}
-  label="Dashboard"
-  active={true}
-  isSidebarOpen={true} // Always show labels in sidebar
-/>
-
+            <NavItem
+              icon={Home}
+              label="Dashboard"
+              active={true}
+              isSidebarOpen={true} // Always show labels in sidebar
+            />
           </Link>
           <Link to="/income">
-            <NavItem icon={Wallet} label="Income" active={false} isSidebarOpen={true} />
+            <NavItem icon={Wallet} label="Income" isSidebarOpen={true} />
           </Link>
           <Link to="/expenses">
-            <NavItem icon={CreditCard} label="Expenses" active={false} isSidebarOpen={true} />
+            <NavItem icon={CreditCard} label="Expenses" isSidebarOpen={true} />
           </Link>
           <Link to="/financegoal">
-            <NavItem icon={Goal} label="Goals" active={false} isSidebarOpen={true} />
+            <NavItem icon={Goal} label="Goals" isSidebarOpen={true} />
           </Link>
           <Link to="/budgets">
-            <NavItem icon={List} label="Budgets" active={false} isSidebarOpen={true} />
+            <NavItem icon={List} label="Budgets" isSidebarOpen={true} />
           </Link>
         </nav>
       </aside>
@@ -201,7 +249,7 @@ const handleLogout = () => {
                   align="end"
                   className="w-48 bg-white shadow-lg rounded-md"
                 >
-                  {/* ✅ Clicking View Profile opens the popover but doesn't close it when moving mouse */}
+                  {/* Responsive Popover */}
                   <Popover
                     open={openPopover}
                     onOpenChange={setOpenPopover}
@@ -216,29 +264,30 @@ const handleLogout = () => {
                       </DropdownMenuItem>
                     </PopoverTrigger>
                     <PopoverContent
-                      side="right"
-                      align="start"
-                      className="w-80 p-4 bg-white shadow-lg rounded-md"
+                      side={isMobile ? "bottom" : "right"}
+                      align={isMobile ? "center" : "start"}
+                      className="w-[60vw] max-w-xs sm:max-w-sm md:w-80 p-3 sm:p-4 bg-white shadow-lg rounded-md"
+                      sideOffset={isMobile ? 5 : 10}
                     >
-                      {/* ✅ Section: Personal Information */}
-                      <h2 className="text-xl font-semibold">
+                      {/* Personal Information */}
+                      <h2 className="text-lg sm:text-xl font-semibold">
                         Personal Information
                       </h2>
-                      <div className="relative mt-2 p-4 rounded-lg border bg-gray-100">
-                        {/* ✅ Toggle between Settings and Save button */}
+                      <div className="relative mt-2 p-3 sm:p-4 pb-2 rounded-lg border bg-gray-100">
+                        {/* Toggle button - with more space below content */}
                         <button
-                          className="absolute bottom-3 right-2 text-gray-600 hover:text-gray-800"
+                          className="absolute bottom-2 right-2 text-gray-600 hover:text-gray-800"
                           onClick={() => setIsEditing(!isEditing)}
                         >
                           {isEditing ? (
-                            <Save className="w-5 h-5" />
+                            <Save className="w-4 h-4 sm:w-5 sm:h-5" />
                           ) : (
-                            <Settings className="w-5 h-5" />
+                            <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
                           )}
                         </button>
 
-                        <div className="flex items-center space-x-3">
-                          <Avatar className="h-16 w-16">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 space-y-2 sm:space-y-0">
+                          <Avatar className="h-12 w-12 sm:h-16 sm:w-16 flex-shrink-0">
                             <img
                               src={userimg}
                               alt="User"
@@ -246,50 +295,56 @@ const handleLogout = () => {
                             />
                           </Avatar>
 
-                          <div className="w-full">
-                            {isEditing ? ( // ✅ If in edit mode, show input fields
-                              <>
+                          <div className="w-full overflow-hidden">
+                            {isEditing ? (
+                              <div className="flex flex-col space-y-2 mb-6">
                                 <input
                                   type="text"
-                                  className="w-40 px-2 py-1 border rounded-md"
+                                  className="w-full px-2 py-1 text-sm sm:text-base border rounded-md"
                                   value={fullName}
                                   onChange={(e) => setFullName(e.target.value)}
+                                  placeholder="Full Name"
                                 />
                                 <input
                                   type="email"
-                                  className="w-40 mt-2 px-2 py-1 border rounded-md"
+                                  className="w-full px-2 py-1 text-sm sm:text-base border rounded-md"
                                   value={email}
                                   onChange={(e) => setEmail(e.target.value)}
+                                  placeholder="Email"
                                 />
                                 <input
                                   type="text"
-                                  className="w-40 mt-2 px-2 py-1 border rounded-md"
+                                  className="w-full px-2 py-1 text-sm sm:text-base border rounded-md"
                                   value={username}
                                   onChange={(e) => setUsername(e.target.value)}
+                                  placeholder="Username"
                                 />
-                              </>
+                              </div>
                             ) : (
-                              // ✅ Otherwise, display text
-                              <>
-                                <p className="text-lg font-bold">{fullName}</p>
-                                <p className="text-sm text-gray-600">{email}</p>
-                                <p className="text-sm text-gray-600">
+                              <div className="overflow-hidden">
+                                <p className="text-base sm:text-lg font-bold truncate">
+                                  {fullName}
+                                </p>
+                                <p className="text-xs sm:text-sm text-gray-600 truncate">
+                                  {email}
+                                </p>
+                                <p className="text-xs sm:text-sm text-gray-600 truncate">
                                   Username: {username}
                                 </p>
-                              </>
+                              </div>
                             )}
                           </div>
                         </div>
                       </div>
 
-                      {/* ✅ Section: Notification Settings */}
-                      <div className="mt-4 p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
-                        <div>
-                          <h3 className="text-md font-semibold">
+                      {/* Notification Settings */}
+                      <div className="mt-3 sm:mt-4 p-3 sm:p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
+                        <div className="flex-1 pr-2">
+                          <h3 className="text-sm sm:text-md font-semibold">
                             Notification Settings
                           </h3>
-                          <p className="text-sm text-gray-600">
-                            Manage how you receive alerts and notifications
+                          <p className="text-xs sm:text-sm text-gray-600">
+                            Manage how you receive alerts
                           </p>
                         </div>
                         <Switch
@@ -298,14 +353,14 @@ const handleLogout = () => {
                         />
                       </div>
 
-                      {/* ✅ Section: Email Notifications */}
-                      <div className="mt-2 p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
-                        <div>
-                          <h3 className="text-md font-semibold">
+                      {/* Email Notifications */}
+                      <div className="mt-2 p-3 sm:p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
+                        <div className="flex-1 pr-2">
+                          <h3 className="text-sm sm:text-md font-semibold">
                             Email Notifications
                           </h3>
-                          <p className="text-sm text-gray-600">
-                            Receive weekly summaries and important alerts
+                          <p className="text-xs sm:text-sm text-gray-600">
+                            Weekly summaries and alerts
                           </p>
                         </div>
                         <Switch
@@ -357,9 +412,10 @@ const handleLogout = () => {
           </AlertDialog>
 
           {/* Stats Cards */}
-          <div className="text-base sm:text-lg md:text-xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-2 gap-4">
-            <StatCard title="Total Income" amount="₱100.00" />
-            <StatCard title="Total Expenses" amount="₱100.00" />
+          <div className="text-base sm:text-lg md:text-xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <StatCard title="Total Income" amount="₱16,500.00" />
+            <StatCard title="Total Expenses" amount="₱4,965.00" /> 
+            <StatCard title="Total Savings" amount="₱3,200.00" />
           </div>
 
           {/* Income vs Expenses Chart */}
@@ -368,7 +424,7 @@ const handleLogout = () => {
               <h2 className="text-base sm:text-lg font-semibold text-gray-700 mb-2 sm:mb-3">
                 Income vs Expenses
               </h2>
-              <p className="ttext-base sm:text-lg md:text-xl text-gray-500 mb-4">
+              <p className="text-base sm:text-lg md:text-xl text-gray-500 mb-4">
                 Track your income and expenses over time with this interactive
                 chart.
               </p>
@@ -440,10 +496,29 @@ const handleLogout = () => {
               </div>
             </CardContent>
           </Card>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+            {/* Recent Changes */}
+            <div className="p-4 bg-white shadow-lg rounded-2xl">
+              <h2 className="text-lg font-bold">Recent Changes</h2>
+              <ul className="mt-2 text-sm">
+                <li>₱5,000 added from Salary</li>
+                <li>₱800 deducted for Grocery Shopping</li>
+                <li>₱150 deducted for Coffee</li>
+              </ul>
+            </div>
+
+            {/* My Goals */}
+            <div className="p-4 bg-white shadow-lg rounded-2xl">
+              <h2 className="text-lg font-bold">My Goals</h2>
+              <ul className="mt-2 text-sm">
+                <li>Emergency Fund</li>
+                <li>Vacation: Siargao</li>
+              </ul>
+            </div>
+          </div>
         </main>
       </div>
-
-      
 
       {/* Overlay for mobile when sidebar is open */}
       {isSidebarOpen && (

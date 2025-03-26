@@ -7,19 +7,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Link } from "react-router-dom";
-import {
-  Card,
-  CardHeader,
-  CardContent,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Link, useNavigate } from "react-router-dom";
+import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +20,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -48,17 +40,14 @@ import {
   Plus,
   Trash2,
   BarChart,
-  ChevronRight,
   Clock,
   Calendar,
   AlertCircle,
-  PieChart,
 } from "lucide-react";
 import darkfont from "@/assets/imgs/darkfont.webp";
 import { Switch } from "@/components/ui/switch";
 import { Avatar } from "@/components/ui/avatar";
 import userimg from "@/assets/imgs/user.webp";
-import { Separator } from "@/components/ui/separator";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -91,10 +80,8 @@ import {
   ResponsiveContainer,
   PieChart as RechartsPieChart,
   Pie,
-  Cell,
 } from "recharts";
 
-// Define TypeScript interfaces
 interface BudgetItem {
   id: number;
   category: string;
@@ -115,15 +102,32 @@ interface Budget {
   endDate?: string;
 }
 
+// Type for NavItem props
+interface NavItemProps {
+  icon: React.ElementType;
+  label: string;
+  active?: boolean;
+  isSidebarOpen: boolean;
+}
+
 const BudgetPage = () => {
-  const NavItem = ({ icon: Icon, label, active, isSidebarOpen }) => (
+  const NavItem = ({
+    icon: Icon,
+    label,
+    active,
+    isSidebarOpen,
+  }: NavItemProps) => (
     <div
-      className={`group relative flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all ${
+      className={`group relative flex items-center gap-3 px-4 py-3
+      rounded-lg cursor-pointer transition-all ${
         active ? "text-indigo-900 font-medium" : "text-gray-400"
       } hover:text-indigo-900 hover:font-medium`}
     >
       {active && (
-        <div className="absolute left-0 top-0 h-full w-1 bg-indigo-900 rounded-r-md" />
+        <div
+          className="absolute left-0 top-0 h-full w-1 bg-indigo-900
+        rounded-r-md"
+        />
       )}
       <Icon
         size={24}
@@ -132,7 +136,10 @@ const BudgetPage = () => {
         } group-hover:text-indigo-900`}
       />
       {isSidebarOpen && (
-        <span className="transition-opacity duration-200 opacity-100 group-hover:opacity-100">
+        <span
+          className="transition-opacity duration-200 opacity-100
+        group-hover:opacity-100"
+        >
           {label}
         </span>
       )}
@@ -145,11 +152,11 @@ const BudgetPage = () => {
   const [newBudgetDialogOpen, setNewBudgetDialogOpen] = useState(false);
   const [newItemDialogOpen, setNewItemDialogOpen] = useState(false);
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState(null);
-  const [budgetToDelete, setBudgetToDelete] = useState(null);
+  const [itemToDelete, setItemToDelete] = useState<number | null>(null);
+  const [budgetToDelete, setBudgetToDelete] = useState<number | null>(null);
   const [deleteBudgetAlertOpen, setDeleteBudgetAlertOpen] = useState(false);
   const [currentBudgetId, setCurrentBudgetId] = useState(1);
-  const [activeChartView, setActiveChartView] = useState("bar"); // "bar" or "pie"
+  const [activeChartView] = useState("bar"); // "bar" or "pie"
 
   // State for new budget form
   const [newBudgetName, setNewBudgetName] = useState("");
@@ -158,7 +165,8 @@ const BudgetPage = () => {
   // State for new budget item form
   const [newItemCategory, setNewItemCategory] = useState("");
   const [newItemPlanned, setNewItemPlanned] = useState("");
-  const [editingBudgetId, setEditingBudgetId] = useState(null);
+  const [editingBudgetId, setEditingBudgetId] = useState<number | null>(null);
+  const navigate = useNavigate();
 
   // Sample data for budgets
   const [budgets, setBudgets] = useState<Budget[]>([
@@ -166,14 +174,14 @@ const BudgetPage = () => {
       id: 1,
       name: "March 2025 Budget",
       period: "monthly",
-      totalPlanned: 3000,
-      totalActual: 2050,
+      totalPlanned: 13400,
+      totalActual: 4965,
       startDate: "2025-03-01",
       endDate: "2025-03-31",
       items: [
         {
           id: 1,
-          category: "Housing",
+          category: "Rent",
           planned: 1200,
           actual: 1200,
           remaining: 0,
@@ -182,42 +190,34 @@ const BudgetPage = () => {
         {
           id: 2,
           category: "Groceries",
-          planned: 500,
-          actual: 320,
-          remaining: 180,
+          planned: 5000,
+          actual: 450,
+          remaining: 4550,
           progress: 64,
         },
         {
           id: 3,
           category: "Transportation",
-          planned: 300,
-          actual: 150,
-          remaining: 150,
+          planned: 2000,
+          actual: 115,
+          remaining: 1885,
           progress: 50,
         },
         {
           id: 4,
-          category: "Entertainment",
-          planned: 200,
-          actual: 180,
-          remaining: 20,
+          category: "Allowance",
+          planned: 2000,
+          actual: 0,
+          remaining: 1000,
           progress: 90,
         },
         {
           id: 5,
-          category: "School",
-          planned: 350,
-          actual: 200,
-          remaining: 150,
+          category: "Savings",
+          planned: 3200,
+          actual: 3200,
+          remaining: 0,
           progress: 85,
-        },
-        {
-          id: 6,
-          category: "Others",
-          planned: 450,
-          actual: 0,
-          remaining: 450,
-          progress: 0,
         },
       ],
     },
@@ -225,24 +225,24 @@ const BudgetPage = () => {
       id: 2,
       name: "Week 1 Groceries",
       period: "weekly",
-      totalPlanned: 5000,
-      totalActual: 4500,
+      totalPlanned: 500,
+      totalActual: 450,
       startDate: "2025-03-10",
       endDate: "2025-03-16",
       items: [
         {
           id: 1,
           category: "House Groceries",
-          planned: 3000,
-          actual: 2250,
+          planned: 300,
+          actual: 225,
           remaining: 750,
           progress: 60,
         },
         {
           id: 2,
           category: "Apartment Groceries",
-          planned: 3000,
-          actual: 2250,
+          planned: 300,
+          actual: 225,
           remaining: 750,
           progress: 45,
         },
@@ -277,21 +277,32 @@ const BudgetPage = () => {
     },
   ]);
 
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+
+  // Check for mobile screen size
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    // Initial check
+    checkIfMobile();
+
+    // Add event listener
+    window.addEventListener("resize", checkIfMobile);
+
+    // Cleanup
+    return () => window.removeEventListener("resize", checkIfMobile);
+  }, []);
+
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  const handleLogout = () => {
-    console.log("User logged out");
-    // Add actual logout logic here
-  };
-
   const addNewBudget = () => {
     if (!newBudgetName || !newBudgetPeriod) return;
-
     const newId =
       budgets.length > 0 ? Math.max(...budgets.map((b) => b.id)) + 1 : 1;
-
     const newBudget: Budget = {
       id: newId,
       name: newBudgetName,
@@ -301,7 +312,6 @@ const BudgetPage = () => {
       totalActual: 0,
       startDate: new Date().toISOString().split("T")[0],
     };
-
     setBudgets([...budgets, newBudget]);
     setNewBudgetName("");
     setNewBudgetPeriod("monthly");
@@ -312,7 +322,6 @@ const BudgetPage = () => {
 
   const addNewBudgetItem = () => {
     if (!newItemCategory || !newItemPlanned || !editingBudgetId) return;
-
     const updatedBudgets = budgets.map((budget) => {
       if (budget.id === editingBudgetId) {
         const newItem = {
@@ -326,7 +335,6 @@ const BudgetPage = () => {
           remaining: parseFloat(newItemPlanned),
           progress: 0,
         };
-
         const updatedItems = [...budget.items, newItem];
         const totalPlanned = updatedItems.reduce(
           (sum, item) => sum + item.planned,
@@ -336,7 +344,6 @@ const BudgetPage = () => {
           (sum, item) => sum + item.actual,
           0
         );
-
         return {
           ...budget,
           items: updatedItems,
@@ -346,7 +353,6 @@ const BudgetPage = () => {
       }
       return budget;
     });
-
     setBudgets(updatedBudgets);
     setNewItemCategory("");
     setNewItemPlanned("");
@@ -355,7 +361,6 @@ const BudgetPage = () => {
 
   const handleDeleteItem = () => {
     if (!itemToDelete || !editingBudgetId) return;
-
     const updatedBudgets = budgets.map((budget) => {
       if (budget.id === editingBudgetId) {
         const updatedItems = budget.items.filter(
@@ -369,7 +374,6 @@ const BudgetPage = () => {
           (sum, item) => sum + item.actual,
           0
         );
-
         return {
           ...budget,
           items: updatedItems,
@@ -379,7 +383,6 @@ const BudgetPage = () => {
       }
       return budget;
     });
-
     setBudgets(updatedBudgets);
     setItemToDelete(null);
     setDeleteAlertOpen(false);
@@ -387,12 +390,10 @@ const BudgetPage = () => {
 
   const handleDeleteBudget = () => {
     if (!budgetToDelete) return;
-
     const updatedBudgets = budgets.filter(
       (budget) => budget.id !== budgetToDelete
     );
     setBudgets(updatedBudgets);
-
     if (updatedBudgets.length > 0) {
       // If we're deleting the current budget, switch to the first available one
       if (currentBudgetId === budgetToDelete) {
@@ -400,7 +401,6 @@ const BudgetPage = () => {
         setActivePeriod(updatedBudgets[0].period);
       }
     }
-
     setBudgetToDelete(null);
     setDeleteBudgetAlertOpen(false);
   };
@@ -416,7 +416,11 @@ const BudgetPage = () => {
     filteredBudgets[0];
 
   // Function to update budget category spending
-  const updateActualSpending = (budgetId, itemId, amount) => {
+  const updateActualSpending = (
+    budgetId: number,
+    itemId: number,
+    amount: string
+  ) => {
     const updatedBudgets = budgets.map((budget) => {
       if (budget.id === budgetId) {
         const updatedItems = budget.items.map((item) => {
@@ -427,7 +431,6 @@ const BudgetPage = () => {
               item.planned > 0
                 ? Math.min(100, (actual / item.planned) * 100)
                 : 0;
-
             return {
               ...item,
               actual,
@@ -437,12 +440,10 @@ const BudgetPage = () => {
           }
           return item;
         });
-
         const totalActual = updatedItems.reduce(
           (sum, item) => sum + item.actual,
           0
         );
-
         return {
           ...budget,
           items: updatedItems,
@@ -451,19 +452,16 @@ const BudgetPage = () => {
       }
       return budget;
     });
-
     setBudgets(updatedBudgets);
   };
 
   // Calculate overall budget status
-  const getBudgetStatus = (budget) => {
+  const getBudgetStatus = (budget: Budget | undefined) => {
     if (!budget) return { status: "N/A", color: "gray" };
-
     const percentSpent =
       budget.totalPlanned > 0
         ? (budget.totalActual / budget.totalPlanned) * 100
         : 0;
-
     if (percentSpent > 90) {
       return { status: "Critical", color: "red" };
     } else if (percentSpent > 75) {
@@ -481,7 +479,6 @@ const BudgetPage = () => {
   // Prepare chart data
   const prepareChartData = () => {
     if (!currentBudget || currentBudget.items.length === 0) return [];
-
     return currentBudget.items.map((item) => ({
       name: item.category,
       planned: item.planned,
@@ -493,24 +490,11 @@ const BudgetPage = () => {
   // Prepare pie chart data
   const preparePieChartData = () => {
     if (!currentBudget || currentBudget.items.length === 0) return [];
-
     return currentBudget.items.map((item) => ({
       name: item.category,
       value: item.actual > 0 ? item.actual : 0,
     }));
   };
-
-  // Colors for pie chart
-  const COLORS = [
-    "#0088FE",
-    "#00C49F",
-    "#FFBB28",
-    "#FF8042",
-    "#8884d8",
-    "#82ca9d",
-    "#ffc658",
-    "#FF6B6B",
-  ];
 
   const [fullName, setFullName] = useState("Test User");
   const [email, setEmail] = useState("test@example.com");
@@ -519,7 +503,6 @@ const BudgetPage = () => {
   const [openPopover, setOpenPopover] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-
   const currencySymbol = "₱"; // Change to your preferred currency
 
   return (
@@ -545,16 +528,36 @@ const BudgetPage = () => {
         {/* Sidebar Navigation */}
         <nav className="mt-6 space-y-2">
           <Link to="/dashboard">
-            <NavItem icon={Home} label="Dashboard" isSidebarOpen={true} />
+            <NavItem
+              icon={Home}
+              label="Dashboard"
+              active={false}
+              isSidebarOpen={true}
+            />
           </Link>
           <Link to="/income">
-            <NavItem icon={Wallet} label="Income" isSidebarOpen={true} />
+            <NavItem
+              icon={Wallet}
+              label="Income"
+              active={false}
+              isSidebarOpen={true}
+            />
           </Link>
           <Link to="/expenses">
-            <NavItem icon={CreditCard} label="Expenses" isSidebarOpen={true} />
+            <NavItem
+              icon={CreditCard}
+              label="Expenses"
+              active={false}
+              isSidebarOpen={true}
+            />
           </Link>
           <Link to="/financegoal">
-            <NavItem icon={Goal} label="Goals" isSidebarOpen={true} />
+            <NavItem
+              icon={Goal}
+              label="Goals"
+              active={false}
+              isSidebarOpen={true}
+            />
           </Link>
           <Link to="/budgets">
             <NavItem
@@ -583,7 +586,7 @@ const BudgetPage = () => {
                 <Menu size={24} />
               </Button>
               <h1 className="text-base sm:text-lg md:text-xl font-bold">
-                Budget Management
+                Budgets
               </h1>
             </div>
 
@@ -625,29 +628,30 @@ const BudgetPage = () => {
                       </DropdownMenuItem>
                     </PopoverTrigger>
                     <PopoverContent
-                      side="right"
-                      align="start"
-                      className="w-80 p-4 bg-white shadow-lg rounded-md"
+                      side={isMobile ? "bottom" : "right"}
+                      align={isMobile ? "center" : "start"}
+                      className="w-[60vw] max-w-xs sm:max-w-sm md:w-80 p-3 sm:p-4 bg-white shadow-lg rounded-md"
+                      sideOffset={isMobile ? 5 : 10}
                     >
-                      {/* ✅ Section: Personal Information */}
-                      <h2 className="text-xl font-semibold">
+                      {/* Personal Information */}
+                      <h2 className="text-lg sm:text-xl font-semibold">
                         Personal Information
                       </h2>
-                      <div className="relative mt-2 p-4 rounded-lg border bg-gray-100">
-                        {/* ✅ Toggle between Settings and Save button */}
+                      <div className="relative mt-2 p-3 sm:p-4 pb-2 rounded-lg border bg-gray-100">
+                        {/* Toggle button - with more space below content */}
                         <button
-                          className="absolute bottom-3 right-2 text-gray-600 hover:text-gray-800"
+                          className="absolute bottom-2 right-2 text-gray-600 hover:text-gray-800"
                           onClick={() => setIsEditing(!isEditing)}
                         >
                           {isEditing ? (
-                            <Save className="w-5 h-5" />
+                            <Save className="w-4 h-4 sm:w-5 sm:h-5" />
                           ) : (
-                            <Settings className="w-5 h-5" />
+                            <Settings className="w-4 h-4 sm:w-5 sm:h-5" />
                           )}
                         </button>
 
-                        <div className="flex items-center space-x-3">
-                          <Avatar className="h-16 w-16">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-3 space-y-2 sm:space-y-0">
+                          <Avatar className="h-12 w-12 sm:h-16 sm:w-16 flex-shrink-0">
                             <img
                               src={userimg}
                               alt="User"
@@ -655,50 +659,56 @@ const BudgetPage = () => {
                             />
                           </Avatar>
 
-                          <div className="w-full">
-                            {isEditing ? ( // ✅ If in edit mode, show input fields
-                              <>
+                          <div className="w-full overflow-hidden">
+                            {isEditing ? (
+                              <div className="flex flex-col space-y-2 mb-6">
                                 <input
                                   type="text"
-                                  className="w-40 px-2 py-1 border rounded-md"
+                                  className="w-full px-2 py-1 text-sm sm:text-base border rounded-md"
                                   value={fullName}
                                   onChange={(e) => setFullName(e.target.value)}
+                                  placeholder="Full Name"
                                 />
                                 <input
                                   type="email"
-                                  className="w-40 mt-2 px-2 py-1 border rounded-md"
+                                  className="w-full px-2 py-1 text-sm sm:text-base border rounded-md"
                                   value={email}
                                   onChange={(e) => setEmail(e.target.value)}
+                                  placeholder="Email"
                                 />
                                 <input
                                   type="text"
-                                  className="w-40 mt-2 px-2 py-1 border rounded-md"
+                                  className="w-full px-2 py-1 text-sm sm:text-base border rounded-md"
                                   value={username}
                                   onChange={(e) => setUsername(e.target.value)}
+                                  placeholder="Username"
                                 />
-                              </>
+                              </div>
                             ) : (
-                              // ✅ Otherwise, display text
-                              <>
-                                <p className="text-lg font-bold">{fullName}</p>
-                                <p className="text-sm text-gray-600">{email}</p>
-                                <p className="text-sm text-gray-600">
+                              <div className="overflow-hidden">
+                                <p className="text-base sm:text-lg font-bold truncate">
+                                  {fullName}
+                                </p>
+                                <p className="text-xs sm:text-sm text-gray-600 truncate">
+                                  {email}
+                                </p>
+                                <p className="text-xs sm:text-sm text-gray-600 truncate">
                                   Username: {username}
                                 </p>
-                              </>
+                              </div>
                             )}
                           </div>
                         </div>
                       </div>
 
-                      {/* ✅ Section: Notification Settings */}
-                      <div className="mt-4 p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
-                        <div>
-                          <h3 className="text-md font-semibold">
+                      {/* Notification Settings */}
+                      <div className="mt-3 sm:mt-4 p-3 sm:p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
+                        <div className="flex-1 pr-2">
+                          <h3 className="text-sm sm:text-md font-semibold">
                             Notification Settings
                           </h3>
-                          <p className="text-sm text-gray-600">
-                            Manage how you receive alerts and notifications
+                          <p className="text-xs sm:text-sm text-gray-600">
+                            Manage how you receive alerts
                           </p>
                         </div>
                         <Switch
@@ -707,14 +717,14 @@ const BudgetPage = () => {
                         />
                       </div>
 
-                      {/* ✅ Section: Email Notifications */}
-                      <div className="mt-2 p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
-                        <div>
-                          <h3 className="text-md font-semibold">
+                      {/* Email Notifications */}
+                      <div className="mt-2 p-3 sm:p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
+                        <div className="flex-1 pr-2">
+                          <h3 className="text-sm sm:text-md font-semibold">
                             Email Notifications
                           </h3>
-                          <p className="text-sm text-gray-600">
-                            Receive weekly summaries and important alerts
+                          <p className="text-xs sm:text-sm text-gray-600">
+                            Weekly summaries and alerts
                           </p>
                         </div>
                         <Switch
@@ -757,14 +767,13 @@ const BudgetPage = () => {
                 </AlertDialogCancel>
                 <AlertDialogAction
                   className="bg-indigo-100 hover:bg-indigo-300 text-black"
-                  onClick={handleLogout}
+                  onClick={() => navigate("/login")}
                 >
                   Log Out
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-
           {/* Budget Type Tabs */}
           <div className="flex justify-between items-center mb-6">
             <Tabs
@@ -789,18 +798,17 @@ const BudgetPage = () => {
               </TabsList>
             </Tabs>
 
-            <Button
-              onClick={() => setNewBudgetDialogOpen(true)}
-              className="bg-indigo-400 hover:bg-indigo-600"
-            >
-              <Plus className="mr-2 h-4 w-4" /> New Budget
-            </Button>
           </div>
-
           {/* Budget Selection */}
           {filteredBudgets.length > 0 ? (
-            <div className="mb-6">
-              <Label htmlFor="budgetSelect">Select Budget:</Label>
+              <div className="mb-6 flex flex-col gap-2">
+                <Label htmlFor="budgetSelect">Select Budget: </Label>
+                <Button
+                onClick={() => setNewBudgetDialogOpen(true)}
+                className=" bg-indigo-400 hover:bg-indigo-600 w-fit"
+              >
+                <Plus className="mr-2 h-4 w-4" /> Create New Budget
+              </Button>
               <div className="flex gap-4 mt-2 flex-wrap">
                 {filteredBudgets.map((budget) => (
                   <Card
@@ -850,7 +858,7 @@ const BudgetPage = () => {
               </CardContent>
             </Card>
           )}
-
+    
           {/* Current Budget Overview */}
           {currentBudget && (
             <Card className="mb-6">
@@ -907,7 +915,6 @@ const BudgetPage = () => {
               </CardContent>
             </Card>
           )}
-
           {/* Budget Visualization and Categories in one row */}
           {currentBudget && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -938,7 +945,9 @@ const BudgetPage = () => {
                               height={70}
                             />
                             <YAxis />
-                            <Tooltip formatter={(value) => `₱₱{value}`} />
+                            <Tooltip
+                              formatter={(value) => `${currencySymbol}${value}`}
+                            />
                             <Legend verticalAlign="top" />
                             <Bar
                               dataKey="planned"
@@ -960,15 +969,10 @@ const BudgetPage = () => {
                               outerRadius={80}
                               fill="#8884d8"
                               dataKey="value"
-                            >
-                              {preparePieChartData().map((entry, index) => (
-                                <Cell
-                                  key={`cell-${index}`}
-                                  fill={COLORS[index % COLORS.length]}
-                                />
-                              ))}
-                            </Pie>
-                            <Tooltip formatter={(value) => `₱₱{value}`} />
+                            ></Pie>
+                            <Tooltip
+                              formatter={(value) => `${currencySymbol}${value}`}
+                            />
                             <Legend />
                           </RechartsPieChart>
                         )}
@@ -1076,7 +1080,6 @@ const BudgetPage = () => {
               </Card>
             </div>
           )}
-
           {/* Tips and Suggestions */}
           {currentBudget && (
             <Card>

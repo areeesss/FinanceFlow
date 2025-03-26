@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import image from "@/assets/imgs/halfbg.webp";
 import logo from "@/assets/imgs/Financelogo.webp";
@@ -25,12 +25,12 @@ const resetpass = () => {
   const [passwordMatch, setPasswordMatch] = useState(true);
   const [open, setOpen] = useState(false);
 
-  const handlePasswordChange = (e) => {
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setPassword(e.target.value);
     setPasswordMatch(e.target.value === confirmPassword);
   };
-
-  const handleConfirmPasswordChange = (e) => {
+  
+  const handleConfirmPasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setConfirmPassword(e.target.value);
     setPasswordMatch(password === e.target.value);
   };

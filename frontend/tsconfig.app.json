@@ -12,6 +12,8 @@
         "./src/*"
       ]
     },
+    
+    "types": ["react", "react-dom"],
 
     /* Bundler mode */
     "moduleResolution": "bundler",

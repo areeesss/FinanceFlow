@@ -1,59 +1,131 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
+import { User } from "../api/authService";
+import {
+  login as apiLogin,
+  logout as apiLogout,
+  register as apiRegister,
+  getCurrentUser,
+  refreshToken as apiRefreshToken,
+} from "../api/authService";
 
 interface AuthContextType {
-  isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  user: User | null;
+  login: (email: string, password: string) => Promise<void>;
+  register: (
+    name: string, 
+    email: string, 
+    username: string, 
+    password: string,
+    password2: string // Added this
+  ) => Promise<void>;
+  logout: () => Promise<void>;
+  loading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined); 
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  // Load authentication state from local storage
-  const storedAuthState = localStorage.getItem('isAuthenticated');
-  const [isAuthenticated, setIsAuthenticated] = useState(storedAuthState === 'true');
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const login = async (email: string, password: string) => { 
-    // Save authentication state to local storage
-    localStorage.setItem('isAuthenticated', 'true');
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const token = localStorage.getItem("access_token");
+        if (token) {
+          const userData = await getCurrentUser();
+          setUser(userData);
+        }
+      } catch (error) {
+        console.error("Failed to load user", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadUser();
+  }, []);
 
-    console.log("Attempting login with:", email, password); // Debugging
-
-    const response = await fetch('http://localhost:8000/login/', { 
-        credentials: 'include', // Include credentials in the request
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-    });
-
-    if (response.ok) {
-        console.log("Login successful!"); // Debugging
-        setIsAuthenticated(true);
-        return true;
+  const register = async (
+    name: string, 
+    email: string, 
+    username: string, 
+    password: string,
+    password2: string // Added this
+  ) => {
+    try {
+      setLoading(true);
+      const { access, refresh, user } = await apiRegister({
+        full_name: name,
+        email,
+        username,
+        password,
+        password2 // Added this
+      });
+      localStorage.setItem("access_token", access);
+      localStorage.setItem("refresh_token", refresh);
+      setUser(user);
+    } catch (error) {
+      console.error("Registration failed:", error);
+      throw new Error("Registration failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
-
-    console.log("Login failed: Invalid credentials"); // Debugging
-    return false;
   };
 
-  const logout = () => { 
-    // Clear authentication state from local storage
-    localStorage.removeItem('isAuthenticated');
-    setIsAuthenticated(false);
-    console.log("User logged out");
+  const login = async (email: string, password: string) => {
+    try {
+      const { access, refresh, user } = await apiLogin({ email, password });
+      localStorage.setItem("access_token", access);
+      localStorage.setItem("refresh_token", refresh);
+      setUser(user);
+    } catch (error) {
+      console.error("Login failed:", error);
+      throw new Error("Invalid email or password");
+    }
   };
 
-  return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const logout = async () => {
+    try {
+      await apiLogout();
+    } finally {
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
+      setUser(null);
+    }
+  };
+
+  const refreshAccessToken = async () => {
+    try {
+      const refreshToken = localStorage.getItem("refresh_token");
+      if (!refreshToken) throw new Error("No refresh token found");
+
+      const { access } = await apiRefreshToken({ refresh: refreshToken });
+      localStorage.setItem("access_token", access);
+      return access;
+    } catch (error) {
+      console.error("Token refresh failed, logging out:", error);
+      await logout();
+    }
+  };
+
+  const value = { 
+    user, 
+    login, 
+    register, 
+    logout, 
+    refreshAccessToken, 
+    loading 
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within AuthProvider");
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider");
+  }
   return context;
 };
+
+export { AuthContext };

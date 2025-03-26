@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import image from "@/assets/imgs/halfbg.webp";
 import logo from "@/assets/imgs/Financelogo.webp";

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import image from "@/assets/imgs/halfbg.webp";
@@ -34,7 +34,7 @@ const App = () => {
         className="absolute inset-0 z-0 bg-cover size-full overflow-y-hidden"
       />
       <div className=" bg-black/15 z-10 w-full min-h-screen flex flex-col justify-center items-center">
-        <span className="absolute inset-7 font-serif text-[#D3D3D3] text-4xl">
+        <span className="absolute inset-7 font-serif text-[#D3D3D3] md:text-4xl text-base">
           FINANCEFLOW
         </span>
         <div className="text-black font-bold text-4xl h-60 flex items-center justify-center overflow-y-hidden">

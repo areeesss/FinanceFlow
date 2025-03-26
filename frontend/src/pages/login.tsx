@@ -13,39 +13,25 @@ import { FcGoogle } from "react-icons/fc";
 const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { login } = useAuth(); // Get login function from AuthContext
 
+  // Handle login function
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const response = await fetch('http://localhost:8000/login/', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email, password }),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      console.log(data.message); // Optionally log the success message
-      console.log("Login successful, redirecting to dashboard..."); // Log redirect action
-      console.log("Navigating to dashboard..."); // Debugging log before navigation
-      localStorage.setItem('isAuthenticated', 'true'); // Set authentication state
-      navigate("/dashboard"); // Redirect to Dashboard after login
-    } else {
-      const errorData = await response.json();
-      alert(errorData.error || "Invalid credentials!");
+    e.preventDefault(); // Prevent page reload
+    setLoading(true);
+    try {
+      await login(email, password);
+      navigate("/dashboard");
+    } catch (error) {
+      console.error("Login error:", error);
+      alert("Invalid credentials! Please try again.");
+    } finally {
+      setLoading(false);
     }
-
   };
-
-  const [showPassword, setShowPassword] = useState(false);
-
-  const [loading, setLoading] = useState(false);
-
-  console.log("Trying to log in with:", email, password);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -53,11 +39,6 @@ const LoginPage = () => {
       document.body.style.overflow = "auto";
     };
   }, []);
-
-  const handleLoginClick = () => {
-    setLoading(true);
-    setTimeout(() => setLoading(false), 1000);
-  };
 
   return (
     <motion.div
@@ -85,13 +66,14 @@ const LoginPage = () => {
               </h1>
             </div>
 
-            <div className="space-y-5">
-              {/* Username Input */}
+            <form onSubmit={handleLogin} className="space-y-5">
+              {/* Email Input */}
               <div className="space-y-2">
                 <label className="text-black text-base">Enter Email</label>
                 <Input
                   className="h-[52px] bg-[#f4f2f2] rounded-lg w-full"
                   placeholder="Enter email"
+                  value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
@@ -101,6 +83,7 @@ const LoginPage = () => {
                 <div className="flex justify-between">
                   <label className="text-black text-base">Password</label>
                   <button
+                    type="button"
                     className="text-[#2d346b] text-sm hover:underline"
                     onClick={() => navigate("/forgot-password")}
                   >
@@ -112,6 +95,7 @@ const LoginPage = () => {
                     type={showPassword ? "text" : "password"}
                     className="h-[52px] bg-[#f4f2f2] rounded-lg w-full pr-10"
                     placeholder="Enter password"
+                    value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
                   {showPassword ? (
@@ -130,41 +114,40 @@ const LoginPage = () => {
 
               {/* Login Button */}
               <Button
-type="button"
                 className="w-full h-[51px] bg-[#a9b5df] hover:bg-[#98a6d7] text-[#2d346b] text-lg shadow-lg rounded-lg"
                 disabled={loading}
-                onClick={handleLogin}
+                type="submit"
               >
                 {loading ? "Logging in..." : "Log In"}
               </Button>
+            </form>
 
-              <div className="flex items-center my-4">
-                <div className="flex-grow border-t border-gray-400"></div>
-                <span className="mx-3 text-gray-600">Or continue with</span>
-                <div className="flex-grow border-t border-gray-400"></div>
-              </div>
-
-              {/* Google Login Button */}
-              <Button
-                className="w-full flex items-center justify-center h-[50px] bg-white border border-gray-300 text-black rounded-lg shadow-md hover:bg-gray-100"
-                onClick={() => navigate("/gmail")}
-              >
-                <FcGoogle className="w-6 h-6 mr-1" />
-                Sign in with Google
-              </Button>
-
-              {/* Signup Link */}
-              <p className="text-center text-lg">
-                <span className="text-[#2d346b]">Don't have an account? </span>
-                <Button
-                  variant="link"
-                  className="text-[#2d346b] p-0"
-                  onClick={() => navigate("/signup")}
-                >
-                  Sign Up
-                </Button>
-              </p>
+            <div className="flex items-center my-4">
+              <div className="flex-grow border-t border-gray-400"></div>
+              <span className="mx-3 text-gray-600">Or continue with</span>
+              <div className="flex-grow border-t border-gray-400"></div>
             </div>
+
+            {/* Google Login Button */}
+            <Button
+              className="w-full flex items-center justify-center h-[50px] bg-white border border-gray-300 text-black rounded-lg shadow-md hover:bg-gray-100"
+              onClick={() => navigate("/gmail")}
+            >
+              <FcGoogle className="w-6 h-6 mr-1" />
+              Sign in with Google
+            </Button>
+
+            {/* Signup Link */}
+            <p className="text-center text-lg mt-3">
+              <span className="text-[#2d346b]">Don't have an account? </span>
+              <Button
+                variant="link"
+                className="text-[#2d346b] p-0"
+                onClick={() => navigate("/signup")}
+              >
+                Sign Up
+              </Button>
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -180,4 +163,5 @@ type="button"
     </motion.div>
   );
 };
+
 export default LoginPage;
