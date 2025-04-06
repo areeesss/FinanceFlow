@@ -2,6 +2,8 @@ services:
   - type: web
     name: financeflow-api
     env: python
+    region: singapore
+    plan: free
     buildCommand: cd backend && chmod +x build.sh && ./build.sh
     startCommand: cd backend && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
@@ -21,4 +23,5 @@ services:
 databases:
   - name: financeflow-db
     databaseName: financeflow
-    plan: free 
+    plan: free
+    region: singapore 
