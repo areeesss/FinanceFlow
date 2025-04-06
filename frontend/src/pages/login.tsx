@@ -7,27 +7,68 @@ import logo from "@/assets/imgs/Financelogo.webp";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Eye, EyeOff, AlertCircle } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { useToast } from "@/components/ui/use-toast";
+import { useMutation } from "@tanstack/react-query";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isPending, setIsPending] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [signupToastShown, setSignupToastShown] = useState(false);
+  const { login, clearError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, error: authError } = useAuth(); // Get login function and error from AuthContext
-  const { addToast } = useToast(); // Use toast hook for notifications
+  
+  // Check if the user came from the signup page with success state
+  const signupSuccess = location.state?.signupSuccess || false;
+  const signupEmail = location.state?.email || "";
+  const [toastShown, setToastShown] = useState(false);
+  const { addToast } = useToast();
+  
+  // Get flag from localStorage to show signup toast only once
+  const hasShownSignupToast = localStorage.getItem('signupToastShown');
+  
+  // Clear localStorage data if not coming from signup page
+  useEffect(() => {
+    // Only clear data if not coming from signup page with success
+    if (!signupSuccess) {
+      // Clear all local storage data
+      const keys = Object.keys(localStorage);
+      const keysToKeep = ['signupToastShown']; // Keep certain flags if needed
+      
+      keys.forEach(key => {
+        if (!keysToKeep.includes(key)) {
+          localStorage.removeItem(key);
+        }
+      });
+      console.log("Cleared localStorage data on login page load");
+    }
+  }, [signupSuccess]);
+  
+  // Create a mutation for login
+  const loginMutation = useMutation({
+    mutationFn: async (credentials: { email: string; password: string }) => {
+      return login(credentials.email, credentials.password);
+    },
+    onError: (error: any) => {
+      console.error("Login error:", error);
+      addToast({
+        title: "Login Failed",
+        description: error.message || "Failed to log in. Please check your credentials.",
+        variant: "destructive",
+      });
+    }
+  });
   
   // Show signup success message if navigated from signup
   useEffect(() => {
     // Check local storage to see if we've shown this message before
     const hasShownSignupToast = localStorage.getItem('signupToastShown');
     
-    if (location.state?.signupSuccess && !signupToastShown && !hasShownSignupToast) {
+    if (location.state?.signupSuccess && !toastShown && !hasShownSignupToast) {
       addToast({
         title: "Registration Successful",
         description: `Account created for ${location.state.email}. Please log in.${
@@ -38,7 +79,7 @@ const Login = () => {
       });
       
       // Set both local state and localStorage flag to prevent showing the toast again
-      setSignupToastShown(true);
+      setToastShown(true);
       localStorage.setItem('signupToastShown', 'true');
       
       // Clear the flag after a reasonable time (e.g., 1 minute)
@@ -46,18 +87,18 @@ const Login = () => {
         localStorage.removeItem('signupToastShown');
       }, 60000);
     }
-  }, [location.state, addToast, signupToastShown]);
+  }, [location.state, addToast, toastShown]);
   
   // Show auth errors using toast
   useEffect(() => {
-    if (authError) {
+    if (errorMessage) {
       addToast({
         title: "Login Failed",
-        description: authError,
+        description: errorMessage,
         variant: "destructive",
       });
     }
-  }, [authError, addToast]);
+  }, [errorMessage, addToast]);
 
   // Handle login function
   const handleLogin = async (e: React.FormEvent) => {
@@ -73,14 +114,8 @@ const Login = () => {
       return;
     }
     
-    setLoading(true);
-    try {
-      await login(email, password);
-    } catch (error) {
-      console.error("Login error:", error);
-    } finally {
-      setLoading(false);
-    }
+    // Execute the login mutation
+    loginMutation.mutate({ email, password });
   };
 
   // Handle navigation to signup page
@@ -179,10 +214,10 @@ const Login = () => {
               {/* Login Button */}
               <Button
                 className="w-full h-[51px] bg-[#a9b5df] hover:bg-[#98a6d7] text-[#2d346b] text-lg shadow-lg rounded-lg"
-                disabled={loading}
+                disabled={loginMutation.isPending}
                 type="submit"
               >
-                {loading ? "Logging in..." : "Log In"}
+                {loginMutation.isPending ? "Logging in..." : "Log In"}
               </Button>
             </form>
             
