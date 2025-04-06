@@ -14,6 +14,9 @@ if [ ! -f db.sqlite3 ]; then
     touch db.sqlite3
 fi
 
+# Create directory for static files
+mkdir -p staticfiles
+
 # Apply migrations
 python manage.py migrate
 
