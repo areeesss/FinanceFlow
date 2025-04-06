@@ -715,7 +715,7 @@ const Income = () => {
                     </Button>
                   </div>
                 </div>
-              </CardContent>
+        </CardContent>
             </Card>
           </div>
         )}
@@ -1185,7 +1185,7 @@ const Income = () => {
                     >
                       Add Income Source
                     </Button>
-                  </div>
+            </div>
                 )}
           </div>
             </div>
