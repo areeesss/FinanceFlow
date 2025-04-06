@@ -48,26 +48,26 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useFinance } from "@/context/FinanceContext";
-import { expenseService } from "@/services/api";
 import { LoadingSpinner } from "@/components/common/LoadingSpinner";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { Label } from "@/components/ui/label";
+import { useExpenses } from "@/hooks";
 
 // Define a set of consistent colors for expense sources
 const EXPENSE_COLORS = [
-  "#F56565", // Red
+  "#FF0000", // Red (from image)
+  "#DC143C", // Crimson red (from image)
+  "#B22222", // Fire brick red (from image)
+  "#8B0000", // Dark red (from image)
+  "#F56565", // Additional reds
+  "#E53E3E",
+  "#C53030",
+  "#9B2C2C",
+  "#742A2A",
   "#ED8936", // Orange
   "#DD6B20", // Dark Orange
   "#9F7AEA", // Purple
-  "#805AD5", // Purple
-  "#D53F8C", // Pink
-  "#4299E1", // Blue
-  "#3182CE", // Blue
-  "#38B2AC", // Teal
-  "#48BB78", // Green
-  "#38A169", // Green
-  "#667EEA", // Indigo
 ];
 
 // Add color options array near the top of the file with the other constants
@@ -140,12 +140,27 @@ interface CustomTooltipProps {
 
 const Expenses = () => {
   const { addToast } = useToast();
-  const { expenses, loading, error, refreshData } = useFinance();
   const { user } = useAuth();
   const navigate = useNavigate();
+  
+  // Use our custom expenses hook instead of direct TanStack Query
+  const {
+    expenses,
+    isLoading,
+    error,
+    totalExpenses,
+    formatCurrency,
+    createExpense,
+    updateExpense,
+    deleteExpense,
+    getChartData
+  } = useExpenses();
+
+  // Transform expenses to match the ExpenseItem interface
   const [expenseData, setExpenseData] = useState<ExpenseItem[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [isMobile, setIsMobile] = useState<boolean>(false);
   const [fullName, setFullName] = useState("Test User");
   const [email, setEmail] = useState("test@example.com");
@@ -154,77 +169,65 @@ const Expenses = () => {
   const [openPopover, setOpenPopover] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [newExpense, setNewExpense] = useState({
+    type: "",
+    amount: "100",
+    color: "#FF0000" // Default red color from image
+  });
+  const [selectedExpense, setSelectedExpense] = useState<ExpenseItem | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   
   // Add ref for scroll container
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Function to scroll to bottom
-  const scrollToBottom = () => {
-    if (scrollContainerRef.current) {
-      setTimeout(() => {
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollTop =
-            scrollContainerRef.current.scrollHeight;
-        }
-      }, 100); // Small delay to ensure DOM updates
-    }
-  };
-  
-  // Process expense data from the backend with saved colors
+  // Process expense data from the custom hook
   useEffect(() => {
     if (expenses && Array.isArray(expenses)) {
-      console.log("Expense data from backend:", expenses);
-      if (expenses.length > 0) {
-        console.log("First expense item:", expenses[0]);
-        console.log("ID properties:", {
-          _id: expenses[0]._id,
-          id: expenses[0].id,
-          typeOfId: typeof expenses[0]._id || typeof expenses[0].id
-        });
-        console.log("Expense color information:", {
-          color: expenses[0].color,
-          typeOfColor: typeof expenses[0].color
-        });
-      }
+      console.log("Expense data from hook:", expenses);
       
-      // Load saved colors from localStorage
-      let savedColors: Record<string, string> = {};
-      try {
-        savedColors = JSON.parse(localStorage.getItem('expenseColors') || '{}');
-        console.log("Loaded colors from localStorage:", savedColors);
-      } catch (e) {
-        console.error("Failed to parse saved colors:", e);
-      }
-      
-      setExpenseData(expenses.map((item, index) => {
-        // Ensure we have an ID - use _id (MongoDB) or id (regular), or fallback to index
-        const itemId = item._id || item.id || `temp-${index}`;
-        console.log(`Item #${index} ID:`, itemId, "Type:", typeof itemId);
-        
-        // Use deterministic color based on type to ensure consistency
-        const typeHash = item.type ? 
-          item.type.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) : 0;
-        const colorIndex = typeHash % EXPENSE_COLORS.length;
-        
-        // First try to get color from localStorage, fallback to default colors
-        const itemColor = savedColors[String(itemId)] || EXPENSE_COLORS[colorIndex];
-        console.log(`Color for item ${index}:`, itemColor);
-        
-        return {
-          id: itemId,
-          // Use name if available, fall back to type, or provide a default if both are missing
-          type: item.name || item.type || 'Misc Expense', 
-          amount: Number(item.amount) || 0,
-          date: item.date || new Date().toISOString(),
-          fill: itemColor,
-          color: itemColor,
-        };
-      }));
+      setExpenseData(expenses.map(item => ({
+        id: item.id,
+        type: item.type || 'Unnamed',
+        amount: item.amount, 
+        date: item.date || new Date().toISOString(),
+        fill: item.color,
+        color: item.color
+      })));
     }
   }, [expenses]);
 
-  // Calculate total expense and ensure it's not NaN
-  const totalExpense = expenseData.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  // Save colors to localStorage when they change
+  useEffect(() => {
+    if (expenseData.length > 0) {
+      const colorMap: Record<string, string> = {};
+      expenseData.forEach(item => {
+        if (item.id && item.color) {
+          colorMap[item.id] = item.color;
+        }
+      });
+      localStorage.setItem('expenseColors', JSON.stringify(colorMap));
+      console.log("Saved colors to localStorage:", colorMap);
+    }
+  }, [expenseData]);
+
+  // Update user data from auth context
+  useEffect(() => {
+    if (user) {
+      setFullName(user.full_name || "");
+      setEmail(user.email || "");
+      setUsername(user.username || "");
+    }
+  }, [user]);
+
+  // Function to scroll to the bottom of the expense list
+  const scrollToBottom = () => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+  };
 
   // Prepare chart data with better filtering using useMemo
   const chartData = useMemo(() => {
@@ -233,53 +236,44 @@ const Expenses = () => {
       .map(item => ({
         name: item.type || 'Unnamed',
         value: Number(item.amount),
-        fill: item.color || item.fill,
+        fill: item.color,
       }));
     
     console.log("Chart data with colors:", chartItems);
     return chartItems;
   }, [expenseData]);
-  
-  // Check for mobile screen size
+
+  // Function to check if the device is mobile
   useEffect(() => {
     const checkIfMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
     checkIfMobile();
-    window.addEventListener("resize", checkIfMobile);
-    return () => window.removeEventListener("resize", checkIfMobile);
+    window.addEventListener('resize', checkIfMobile);
+    return () => window.removeEventListener('resize', checkIfMobile);
   }, []);
 
-  // Custom tooltip component with proper formatting
+  // Custom tooltip component for the chart
   const CustomTooltip = ({ active, payload }: CustomTooltipProps) => {
     if (active && payload && payload.length) {
       const value = Number(payload[0].value);
-      const percent = totalExpense > 0 
-        ? ((value / totalExpense) * 100).toFixed(1)
+      const percent = totalExpenses > 0 
+        ? ((value / totalExpenses) * 100).toFixed(1)
         : '0';
       
       return (
         <div className="bg-white p-2 border rounded shadow">
-          <p className="font-semibold">{payload[0].name}</p>
-          <p>{formatCurrency(value)}</p>
-          <p className="text-gray-600">
-            {percent}% of total
-          </p>
+          <p className="font-medium">{payload[0].name}</p>
+          <p className="text-gray-600">{formatCurrency(value)}</p>
+          <p className="text-gray-600">{percent}% of expenses</p>
         </div>
       );
     }
+    
     return null;
   };
 
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-PH", {
-      style: "currency",
-      currency: "PHP",
-      minimumFractionDigits: 2,
-    }).format(amount);
-  };
-
+  // Define the NavItem component
   const NavItem = ({
     icon: Icon,
     label,
@@ -308,103 +302,97 @@ const Expenses = () => {
     </div>
   );
 
-  // Handle adding a new expense with a default amount of 100
+  // Function to add a new expense
   const addExpenseSource = async () => {
+    if (!newExpense.type || !newExpense.amount) {
+      addToast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const amount = parseFloat(newExpense.amount);
+    if (isNaN(amount) || amount <= 0) {
+      addToast({
+        title: "Error",
+        description: "Please enter a valid amount",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     try {
-      // Define a list of expense source types with appropriate colors
-      const expenseTypes = [
-        { type: "Groceries", color: "#EF4444", description: "Food and household items", amount: 100 }, // Red
-        { type: "Housing", color: "#F59E0B", description: "Rent, mortgage, and utilities", amount: 100 }, // Yellow
-        { type: "Transportation", color: "#10B981", description: "Car, public transit, and fuel", amount: 100 }, // Green
-        { type: "Entertainment", color: "#8B5CF6", description: "Movies, games, and events", amount: 100 }, // Purple
-        { type: "Healthcare", color: "#3B82F6", description: "Medical expenses and insurance", amount: 100 }, // Blue
-      ];
-      
-      // Get existing expense types
-      const existingTypes = expenseData.map(item => item.type);
-      
-      // Find a type that doesn't exist yet, or default to "Other Expense"
-      let newSource = expenseTypes.find(item => !existingTypes.includes(item.type));
-      
-      // If all pre-defined types are used, create one with a random name
-      if (!newSource) {
-        const randomIndex = Math.floor(Math.random() * expenseTypes.length);
-        const baseType = expenseTypes[randomIndex];
-        newSource = {
-          type: `Other Expense ${existingTypes.length + 1}`,
-          color: baseType.color,
-          description: "Additional expense category",
-          amount: 100
-        };
-      }
-      
-      // Add today's date to the new source
-      const today = new Date();
-      const formattedDate = today.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-      
-      // Use type assertion to add the date property
-      const sourceWithDate = {
-        ...newSource,
-        date: formattedDate,
-        name: newSource.type // Ensure name is set equal to type
+      // Prepare the new expense with correct property names
+      const newSource = {
+        type: newExpense.type,
+        amount: amount,
+        description: `Expense for ${newExpense.type}`,
+        color: newExpense.color
       };
-
-      console.log("Quick adding expense source with color:", newSource.color);
-      // Remove the color from what we send to the backend
-      const { color, ...backendData } = sourceWithDate;
-      const response = await expenseService.create(backendData);
+      
+      console.log("Creating new expense with color:", newExpense.color);
+      const response = await createExpense(newSource);
+      
+      // Clear the form and close the dialog
+      setNewExpense({
+        type: "",
+        amount: "100",
+        color: "#FF0000" // Reset to default color
+      });
+      setIsDialogOpen(false);
       
       // When creating a new source, we need to wait for the response to get the ID
       if (response && response.data && response.data.id) {
         // Save color to localStorage
         try {
           const colorMap: Record<string, string> = JSON.parse(localStorage.getItem('expenseColors') || '{}');
-          colorMap[String(response.data.id)] = newSource.color;
+          colorMap[String(response.data.id)] = newExpense.color;
           localStorage.setItem('expenseColors', JSON.stringify(colorMap));
-          console.log("Saved new expense source color to localStorage:", {
+          console.log("Saved new expense color to localStorage:", {
             id: response.data.id,
-            color: newSource.color
+            color: newExpense.color
           });
         } catch (e) {
           console.error("Failed to save color to localStorage:", e);
         }
+        
+        // Scroll to bottom to show new expense
+        setTimeout(scrollToBottom, 300);
       }
-      
-      await refreshData();
-      scrollToBottom();
-      
-      addToast({
-        title: "Success",
-        description: `New expense source added. Edit it to update details.`,
-      });
     } catch (error) {
-      console.error("Error adding expense source:", error);
-      addToast({
-        title: "Error",
-        description: "Failed to add expense source",
-        variant: "destructive",
-      });
+      // Error is handled by the mutation
+      console.error("Error adding expense:", error);
     }
   };
 
-  // Update expense source and refresh chart data
+  // Function to update an expense
   const updateExpenseSource = async (id: string, newType: string, newAmount: string, newDate?: string, newColor?: string) => {
     try {
-      console.log("Updating expense source with ID:", id, "Type:", typeof id);
-      console.log("Color being updated to:", newColor);
+      console.log("updateExpenseSource called with:", { id, newType, newAmount, newDate, newColor });
       
       if (!id) {
         console.error("Cannot update expense with invalid ID:", id);
         addToast({
           title: "Error",
-          description: "Cannot update this expense source (invalid ID)",
+          description: "Cannot update this expense (invalid ID)",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (!newType || !newAmount) {
+        addToast({
+          title: "Error",
+          description: "Please fill in all fields",
           variant: "destructive",
         });
         return;
       }
       
       const amount = parseFloat(newAmount);
-      if (isNaN(amount) || amount < 0) {
+      if (isNaN(amount) || amount <= 0) {
         addToast({
           title: "Error",
           description: "Please enter a valid amount",
@@ -412,38 +400,29 @@ const Expenses = () => {
         });
         return;
       }
-
-      // Save color to localStorage
+      
+      // Save the new color to localStorage
       if (newColor) {
         try {
           const colorMap: Record<string, string> = JSON.parse(localStorage.getItem('expenseColors') || '{}');
           colorMap[String(id)] = newColor;
           localStorage.setItem('expenseColors', JSON.stringify(colorMap));
-          console.log("Saved color to localStorage:", {id, color: newColor});
+          console.log("Saved card color to localStorage:", {id, color: newColor});
         } catch (e) {
           console.error("Failed to save color to localStorage:", e);
         }
       }
-
-      // Both name and type should be updated to the new value
+      
+      // Prepare data to update with correct property names
       const updatedSource = {
         type: newType,
         amount: amount,
-        name: newType, // Setting name equal to type for consistency
-        description: `Expense for ${newType}`,
-        date: newDate || new Date().toISOString().split('T')[0]
-        // Note: We don't send color to backend since it doesn't support it
+        date: newDate || new Date().toISOString(),
+        color: newColor
       };
-
-      console.log("Sending update with data:", updatedSource);
-      await expenseService.update(id, updatedSource);
       
-      addToast({
-        title: "Success",
-        description: "Expense source updated successfully",
-      });
+      await updateExpense(id, updatedSource);
       
-      refreshData();
     } catch (error) {
       console.error("Error updating expense source:", error);
       addToast({
@@ -454,20 +433,20 @@ const Expenses = () => {
     }
   };
 
-  // Delete expense source with confirmation
+  // Function to delete an expense
   const deleteExpenseSource = async (id: string) => {
     try {
-      console.log("Deleting expense with ID:", id, "Type:", typeof id);
-      
       if (!id) {
         console.error("Cannot delete expense with invalid ID:", id);
         addToast({
           title: "Error",
-          description: "Cannot delete this expense source (invalid ID)",
+          description: "Cannot delete this expense (invalid ID)",
           variant: "destructive",
         });
         return;
       }
+      
+      console.log("Deleting expense with ID:", id);
       
       // Remove from localStorage when deleted
       try {
@@ -475,53 +454,51 @@ const Expenses = () => {
         if (colorMap[String(id)]) {
           delete colorMap[String(id)];
           localStorage.setItem('expenseColors', JSON.stringify(colorMap));
-          console.log("Removed color from localStorage for deleted expense source:", id);
+          console.log("Removed color from localStorage for deleted expense:", id);
         }
       } catch (e) {
         console.error("Failed to update localStorage on delete:", e);
       }
       
-      await expenseService.delete(id);
+      await deleteExpense(id);
+      setDeleteDialogOpen(false);
       
-      addToast({
-        title: "Success",
-        description: "Expense source deleted successfully",
-      });
-      
-      refreshData();
     } catch (error) {
-      console.error("Error deleting expense source:", error);
+      console.error("Error deleting expense:", error);
       addToast({
         title: "Error",
-        description: "Failed to delete expense source",
+        description: "Failed to delete expense",
         variant: "destructive",
       });
     }
   };
 
-  // Format date function
+  // Helper function to format dates better
   const formatDate = (dateString?: string) => {
     if (!dateString) return "N/A";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "Invalid date";
-    return new Intl.DateTimeFormat("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    }).format(date);
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch (e) {
+      console.error("Error formatting date:", e);
+      return "Invalid Date";
+    }
   };
 
-  // Stat card with editable amount and title
+  // Define the StatCard component for editable expense sources
   const StatCard = ({ id, title, amount, color, date }: StatCardProps) => {
     const [isEditingCard, setIsEditingCard] = useState(false);
     const [editAmount, setEditAmount] = useState(amount.toString());
     const [editTitle, setEditTitle] = useState(title);
-    const [editDate, setEditDate] = useState(date || new Date().toISOString().split('T')[0]);
+    const [editDate, setEditDate] = useState(date || new Date().toISOString());
     const [editColor, setEditColor] = useState(color);
-    const [isQuickEditing, setIsQuickEditing] = useState(false);
+    
     const [quickAddAmount, setQuickAddAmount] = useState('');
-
-    console.log("StatCard rendering with ID:", id, "Type:", typeof id, "Title:", title, "Color:", color);
+    const [isQuickEditing, setIsQuickEditing] = useState(false);
 
     const handleSaveCard = () => {
       console.log("Saving card with new color:", editColor);
@@ -546,9 +523,22 @@ const Expenses = () => {
       setQuickAddAmount('');
     };
 
-    // Function to safely delete with ID
+    // Function to call handleDelete with the proper ID
     const onDeleteClick = () => {
-      console.log("Attempting to delete expense with ID:", id, "Type:", typeof id);
+      console.log("Attempting to delete expense with ID:", id);
+      
+      // First check if ID is valid
+      if (!id) {
+        console.error("Cannot delete expense with invalid ID:", id);
+        addToast({
+          title: "Error",
+          description: "Cannot delete this expense source (invalid ID)",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Call the delete function directly
       deleteExpenseSource(id);
     };
 
@@ -556,7 +546,7 @@ const Expenses = () => {
       <Card
         id={`expense-card-${id}`}
         className="p-4 shadow-lg rounded-2xl mb-3 flex items-center w-full relative"
-        style={{ backgroundColor: color }}
+        style={{ backgroundColor: isEditingCard ? editColor : color }}
       >
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -582,6 +572,46 @@ const Expenses = () => {
           >
             <Plus size={16} />
           </Button>
+        )}
+
+        {/* Quick Add Popup */}
+        {isQuickEditing && !isEditingCard && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
+            <Card className="shadow-lg p-2 bg-white border border-gray-200">
+              <CardContent className="p-2">
+                <p className="text-sm font-medium mb-2 text-gray-700">Add Amount</p>
+                <div className="flex flex-col gap-2">
+                  <Input
+                    type="number"
+                    value={quickAddAmount}
+                    onChange={(e) => setQuickAddAmount(e.target.value)}
+                    className="w-32 text-black bg-white"
+                    placeholder="Enter amount"
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={handleQuickAdd}
+                      className="bg-green-500 hover:bg-green-600 text-white flex-1"
+                      size="sm"
+                    >
+                      Add
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setIsQuickEditing(false);
+                        setQuickAddAmount('');
+                      }}
+                      className="bg-gray-200 hover:bg-gray-300 text-black"
+                      size="sm"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         <CardContent className="text-center flex-1 p-3">
@@ -687,46 +717,6 @@ const Expenses = () => {
             </div>
           )}
         </CardContent>
-
-        {/* Quick Add Popup */}
-        {isQuickEditing && !isEditingCard && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 z-10">
-            <Card className="shadow-lg p-2 bg-white border border-gray-200">
-              <CardContent className="p-2">
-                <p className="text-sm font-medium mb-2 text-gray-700">Add Amount</p>
-                <div className="flex flex-col gap-2">
-                  <Input
-                    type="number"
-                    value={quickAddAmount}
-                    onChange={(e) => setQuickAddAmount(e.target.value)}
-                    className="w-32 text-black bg-white"
-                    placeholder="Enter amount"
-                    autoFocus
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={handleQuickAdd}
-                      className="bg-green-500 hover:bg-green-600 text-white flex-1"
-                      size="sm"
-                    >
-                      Add
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setIsQuickEditing(false);
-                        setQuickAddAmount('');
-                      }}
-                      className="bg-gray-200 hover:bg-gray-300 text-black"
-                      size="sm"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-        </CardContent>
-            </Card>
-          </div>
-        )}
       </Card>
     );
   };
@@ -969,7 +959,7 @@ const Expenses = () => {
 
                   <DropdownMenuItem
                     onSelect={(e) => e.preventDefault()}
-                    onClick={() => setIsDialogOpen(true)}
+                    onClick={() => setIsLogoutDialogOpen(true)}
                   >
                     Log Out
                   </DropdownMenuItem>
@@ -982,7 +972,7 @@ const Expenses = () => {
         {/* Main Content Area */}
         <main className="flex-1 p-6 overflow-y-auto">
           {/* Logout Confirmation Dialog */}
-          <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <AlertDialog open={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
@@ -993,7 +983,7 @@ const Expenses = () => {
               <AlertDialogFooter>
                 <AlertDialogCancel
                   className="bg-indigo-100 hover:bg-indigo-300"
-                  onClick={() => setIsDialogOpen(false)}
+                  onClick={() => setIsLogoutDialogOpen(false)}
                 >
                   Cancel
                 </AlertDialogCancel>
@@ -1015,36 +1005,36 @@ const Expenses = () => {
                 <CardHeader>
                   <CardTitle>Expenses Overview</CardTitle>
                   <CardDescription className="flex justify-between items-center">
-                    <span>Breakdown of your expenses sources (Total: {formatCurrency(totalExpense)})</span>
+                    <span>Breakdown of your expenses sources (Total: {formatCurrency(expenseData.reduce((sum, item) => sum + (Number(item.amount) || 0), 0))})</span>
                     <Button
-                      onClick={addExpenseSource}
+                      onClick={() => setIsDialogOpen(true)}
                       className="bg-indigo-500 hover:bg-indigo-600 text-white"
                     >
-                      <Plus size={16} className="mr-1" />
+                      <Plus className="w-4 h-4 mr-2" />
                       Add Expense
                     </Button>
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex-1 pb-0 flex justify-center">
-                  {loading ? (
-                    <div className="flex items-center justify-center h-full">
-                      <LoadingSpinner />
+                <CardContent className="flex-1 pb-0 flex justify-center h-[320px]">
+                  {isLoading ? (
+                    <div className="flex items-center justify-center w-full h-full">
+                      <LoadingSpinner size="lg" />
                     </div>
                   ) : error ? (
                     <div className="text-center text-red-500">
-                      <p>{error}</p>
-                      <Button onClick={refreshData} className="mt-4">
+                      <p>{error.message}</p>
+                      <Button onClick={() => window.location.reload()} className="mt-4">
                         Retry
                       </Button>
                     </div>
-                  ) : chartData.length > 0 ? (
+                  ) : expenseData.length > 0 ? (
                     <div className="mx-auto w-full max-w-[500px] h-[320px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
-                            data={chartData}
-                            dataKey="value"
-                            nameKey="name"
+                            data={expenseData}
+                            dataKey="amount"
+                            nameKey="type"
                             cx="50%"
                             cy="50%"
                             outerRadius={isMobile ? 80 : 120}
@@ -1052,18 +1042,18 @@ const Expenses = () => {
                             paddingAngle={2}
                             startAngle={90}
                             endAngle={-270}
-                            label={({ name, percent }) => {
-                              const percentage = (percent * 100).toFixed(0);
+                            label={({ name, amount }) => {
+                              const percentage = ((amount / expenseData.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)) * 100).toFixed(0);
                               return isMobile
                                 ? `${percentage}%`
                                 : `${name}: ${percentage}%`;
                             }}
                             labelLine={!isMobile}
                           >
-                            {chartData.map((entry, index) => (
+                            {expenseData.map((entry, index) => (
                               <Cell 
                                 key={`cell-${index}`} 
-                                fill={entry.fill}
+                                fill={entry.color}
                                 stroke="#ffffff"
                                 strokeWidth={1}
                               />
@@ -1080,9 +1070,9 @@ const Expenses = () => {
                       </p>
                       <Button
                         className="bg-indigo-500 hover:bg-indigo-600 text-white"
-                        onClick={addExpenseSource}
+                        onClick={() => setIsDialogOpen(true)}
                       >
-                        Add Expense Source
+                        Add Expense
                       </Button>
                     </div>
                   )}
@@ -1094,9 +1084,13 @@ const Expenses = () => {
             <div className="md:col-span-1 flex flex-col justify-between">
               <div
                 className="h-[428px] overflow-y-auto space-y-3 p-3 border border-grey shadow-lg bg-white rounded-xl"
-                ref={scrollContainerRef} // Add the ref here
+                ref={scrollContainerRef}
               >
-                {expenseData.length > 0 ? (
+                {isLoading ? (
+                  <div className="flex items-center justify-center w-full h-full min-h-[320px]">
+                    <LoadingSpinner size="lg" />
+                  </div>
+                ) : expenseData.length > 0 ? (
                   expenseData.map((expense) => (
                   <StatCard
                     key={expense.id}
@@ -1112,9 +1106,9 @@ const Expenses = () => {
                     <p className="mb-4">No expense sources found</p>
                     <Button
                       className="bg-indigo-500 hover:bg-indigo-600 text-white"
-                onClick={addExpenseSource}
-              >
-                      Add Expense Source
+                      onClick={() => setIsDialogOpen(true)}
+                    >
+                      Add Expense
                     </Button>
             </div>
                 )}
@@ -1138,7 +1132,15 @@ const Expenses = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {expenseData.length > 0 ? (
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-12 text-center">
+                        <div className="flex justify-center items-center h-[100px] w-full">
+                          <LoadingSpinner size="md" />
+                        </div>
+                      </td>
+                    </tr>
+                  ) : expenseData.length > 0 ? (
                     expenseData.map((expense) => (
                       <tr key={expense.id} className="border-b hover:bg-gray-50">
                         <td className="px-4 py-3">{formatDate(expense.date)}</td>
@@ -1177,6 +1179,130 @@ const Expenses = () => {
           onClick={toggleSidebar}
         />
       )}
+
+      {/* Add Expense Dialog */}
+      <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Add Expense</AlertDialogTitle>
+            <AlertDialogDescription>
+              Add a new expense to track your spending
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="type">Type</Label>
+              <Input
+                id="type"
+                value={newExpense.type}
+                onChange={(e) => setNewExpense({ ...newExpense, type: e.target.value })}
+                placeholder="e.g., Groceries, Rent, Transportation"
+                className="text-black font-medium"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="amount">Amount</Label>
+              <Input
+                id="amount"
+                type="number"
+                value={newExpense.amount}
+                onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                placeholder="Enter amount"
+                className="text-black font-medium"
+              />
+            </div>
+            
+            {/* Color Picker with preview */}
+            <div className="grid gap-2">
+              <Label htmlFor="color">Color</Label>
+              <div className="p-2 rounded-md" style={{ backgroundColor: newExpense.color }}>
+                <div className="bg-white p-3 rounded-lg shadow-inner border">
+                  <div className="grid grid-cols-9 gap-2">
+                    {COLOR_OPTIONS.slice(0, 9).map((colorOption, index) => (
+                      <button
+                        key={index}
+                        className={`w-6 h-6 rounded-full ${
+                          newExpense.color === colorOption 
+                            ? 'ring-2 ring-offset-1 ring-black' 
+                            : ''
+                        }`}
+                        style={{ backgroundColor: colorOption }}
+                        onClick={() => setNewExpense({ ...newExpense, color: colorOption })}
+                        type="button"
+                        aria-label={`Color option ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-9 gap-2 mt-2">
+                    {COLOR_OPTIONS.slice(9, 18).map((colorOption, index) => (
+                      <button
+                        key={index + 9}
+                        className={`w-6 h-6 rounded-full ${
+                          newExpense.color === colorOption 
+                            ? 'ring-2 ring-offset-1 ring-black' 
+                            : ''
+                        }`}
+                        style={{ backgroundColor: colorOption }}
+                        onClick={() => setNewExpense({ ...newExpense, color: colorOption })}
+                        type="button"
+                        aria-label={`Color option ${index + 10}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-9 gap-2 mt-2">
+                    {COLOR_OPTIONS.slice(18, 27).map((colorOption, index) => (
+                      <button
+                        key={index + 18}
+                        className={`w-6 h-6 rounded-full ${
+                          newExpense.color === colorOption 
+                            ? 'ring-2 ring-offset-1 ring-black' 
+                            : ''
+                        }`}
+                        style={{ backgroundColor: colorOption }}
+                        onClick={() => setNewExpense({ ...newExpense, color: colorOption })}
+                        type="button"
+                        aria-label={`Color option ${index + 19}`}
+                      />
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-9 gap-2 mt-2">
+                    {COLOR_OPTIONS.slice(27, 36).map((colorOption, index) => (
+                      <button
+                        key={index + 27}
+                        className={`w-6 h-6 rounded-full ${
+                          newExpense.color === colorOption 
+                            ? 'ring-2 ring-offset-1 ring-black' 
+                            : ''
+                        }`}
+                        style={{ backgroundColor: colorOption }}
+                        onClick={() => setNewExpense({ ...newExpense, color: colorOption })}
+                        type="button"
+                        aria-label={`Color option ${index + 28}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setIsDialogOpen(false);
+              }}
+              className="bg-gray-200 hover:bg-gray-300 text-black"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={addExpenseSource}
+              className="bg-indigo-500 hover:bg-indigo-600 text-white"
+            >
+              Add
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -1,13 +1,73 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { incomeService, expenseService, goalService, budgetService } from '../services/api';
 import { useAuth } from './AuthContext';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+// Define types for the financial data
+interface Income {
+  id: string;
+  name: string;
+  type: string;
+  amount: number;
+  date: string;
+  description?: string;
+  color?: string;
+}
+
+interface Expense {
+  id: string;
+  name: string;
+  type: string;
+  amount: number;
+  date: string;
+  description?: string;
+  color?: string;
+}
+
+interface Goal {
+  id: string;
+  name: string;
+  targetAmount?: number;
+  target_amount?: number;
+  amountSaved?: number;
+  current_amount?: number;
+  deadline?: string;
+  description?: string;
+  color?: string;
+}
+
+interface BudgetItem {
+  id: string;
+  category: string;
+  planned: number;
+  actual: number;
+  remaining?: number;
+  progress?: number;
+  color?: string;
+}
+
+interface Budget {
+  id: string;
+  name: string;
+  period: string;
+  totalPlanned?: number;
+  target_amount?: number;
+  totalActual?: number;
+  current_amount?: number;
+  startDate?: string;
+  start_date?: string;
+  endDate?: string;
+  end_date?: string;
+  items?: BudgetItem[];
+  description?: string;
+}
 
 // Define the shape of our context data
 interface FinanceContextType {
-  income: any[];
-  expenses: any[];
-  goals: any[];
-  budgets: any[];
+  income: Income[];
+  expenses: Expense[];
+  goals: Goal[];
+  budgets: Budget[];
   loading: boolean;
   error: string | null;
   refreshData: () => Promise<void>;
@@ -16,238 +76,338 @@ interface FinanceContextType {
 // Create Context with default values
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 
+// Process API response to handle different formats
+const processApiResponse = <T extends unknown>(response: any): T[] => {
+  if (!response || response.data === undefined) return [];
+
+  // Handle different response formats
+  if (Array.isArray(response.data)) {
+    return response.data as T[];
+  } 
+  
+  if (response.data.results && Array.isArray(response.data.results)) {
+    return response.data.results as T[];
+  } 
+  
+  if (typeof response.data === 'object' && response.data !== null) {
+    // Handle single item
+    if (response.data.id || response.data._id) {
+      return [response.data] as T[];
+    }
+    
+    // Handle nested data under a specific property name
+    const dataKeys = ['income', 'expenses', 'goals', 'budgets'];
+    for (const key of dataKeys) {
+      if (response.data[key] && Array.isArray(response.data[key])) {
+        return response.data[key] as T[];
+      }
+    }
+    
+    // Handle object of objects case
+    const potentialItems = Object.values(response.data).filter(
+      item => typeof item === 'object' && item !== null
+    );
+    
+    if (potentialItems.length > 0) {
+      return potentialItems as T[];
+    }
+  }
+  
+  // Return empty array as fallback
+  return [];
+};
+
+// Generate test data if no real data exists
+const generateTestData = () => {
+  console.log("Generating test data for development");
+  
+  // Test income data with a variety of colors from the color selector
+  const incomeData = [
+    {
+      id: 'test-income-1',
+      name: 'Salary',
+      type: 'Salary',
+      amount: 5000,
+      date: new Date().toISOString().split('T')[0],
+      description: 'Monthly salary payment',
+      color: '#3B82F6' // Blue
+    },
+    {
+      id: 'test-income-2',
+      name: 'Freelance',
+      type: 'Freelance',
+      amount: 1200,
+      date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      description: 'Website development project',
+      color: '#8B5CF6' // Purple
+    },
+    {
+      id: 'test-income-3',
+      name: 'Investments',
+      type: 'Investments',
+      amount: 800,
+      date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      description: 'Dividend payments',
+      color: '#10B981' // Green
+    }
+  ];
+  
+  // Test expense data with a variety of colors from the color selector
+  const expensesData = [
+    {
+      id: 'test-expense-1',
+      name: 'Rent',
+      type: 'Housing',
+      amount: 1500,
+      date: new Date().toISOString().split('T')[0],
+      description: 'Monthly apartment rent',
+      color: '#EF4444' // Red
+    },
+    {
+      id: 'test-expense-2',
+      name: 'Groceries',
+      type: 'Food',
+      amount: 350,
+      date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      description: 'Weekly grocery shopping',
+      color: '#F59E0B' // Amber/Orange
+    },
+    {
+      id: 'test-expense-3',
+      name: 'Transportation',
+      type: 'Transportation',
+      amount: 250,
+      date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      description: 'Car payment and gas',
+      color: '#6366F1' // Indigo
+    }
+  ];
+  
+  // Test goal data
+  const goalsData = [
+    {
+      id: 'test-goal-1',
+      name: 'Emergency Fund',
+      targetAmount: 10000,
+      amountSaved: 6500,
+      current_amount: 6500,
+      target_amount: 10000,
+      deadline: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      description: 'Three months of expenses for emergencies',
+      color: '#0EA5E9' // Light Blue
+    },
+    {
+      id: 'test-goal-2',
+      name: 'New Car',
+      targetAmount: 25000,
+      amountSaved: 12000,
+      current_amount: 12000,
+      target_amount: 25000,
+      deadline: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      description: 'Saving for a new car',
+      color: '#EC4899' // Pink
+    }
+  ];
+  
+  // Test budget data with nice colors
+  const budgetsData = [
+    {
+      id: 'test-budget-1',
+      name: 'Monthly Budget',
+      period: 'monthly',
+      totalPlanned: 3000,
+      totalActual: 2800,
+      target_amount: 3000,
+      current_amount: 2800,
+      startDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      items: [
+        {
+          id: 'test-budget-item-1',
+          category: 'Housing',
+          planned: 1500,
+          actual: 1500,
+          remaining: 0,
+          progress: 100,
+          color: '#3B82F6' // Blue
+        },
+        {
+          id: 'test-budget-item-2',
+          category: 'Food',
+          planned: 500,
+          actual: 350,
+          remaining: 150,
+          progress: 70,
+          color: '#F59E0B' // Amber/Orange
+        },
+        {
+          id: 'test-budget-item-3',
+          category: 'Transportation',
+          planned: 300,
+          actual: 250,
+          remaining: 50,
+          progress: 83,
+          color: '#10B981' // Green
+        }
+      ]
+    }
+  ];
+  
+  return {
+    incomeData,
+    expensesData,
+    goalsData,
+    budgetsData
+  };
+};
+
 // Provider Component
 export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [income, setIncome] = useState<any[]>([]);
-  const [expenses, setExpenses] = useState<any[]>([]);
-  const [goals, setGoals] = useState<any[]>([]);
-  const [budgets, setBudgets] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  const fetchData = async () => {
-    if (!user) {
-      console.log("No user found in FinanceContext, skipping data fetch");
-      setLoading(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      
-      console.log("Starting to fetch financial data for user:", user.id);
-      
-      // Wrap each API call in a try/catch to ensure all data fetching attempts happen
-      let incomeData = [], expensesData = [], goalsData = [], budgetsData = [];
-      
+  // Fetch income data using React Query
+  const { 
+    data: income = [], 
+    isLoading: incomeLoading,
+    error: incomeError
+  } = useQuery({
+    queryKey: ['income'],
+    queryFn: async () => {
       try {
         console.log("Fetching income data...");
-        const incomeRes = await incomeService.getAll();
-        console.log("Raw income response status:", incomeRes.status);
-        console.log("Raw income response data type:", typeof incomeRes.data);
-        console.log("Raw income response data:", incomeRes.data);
-        
-        // Check if the response has data and it's in the expected format
-        if (incomeRes && incomeRes.data !== undefined) {
-          // Handle both array responses and responses where data is nested
-          if (Array.isArray(incomeRes.data)) {
-            incomeData = incomeRes.data;
-          } else if (incomeRes.data.results && Array.isArray(incomeRes.data.results)) {
-            // Some DRF APIs return paginated results with a 'results' property
-            incomeData = incomeRes.data.results;
-          } else if (typeof incomeRes.data === 'object' && incomeRes.data !== null) {
-            // It could be a single item
-            if (incomeRes.data.id || incomeRes.data._id) {
-              incomeData = [incomeRes.data];
-            } else if (incomeRes.data.income && Array.isArray(incomeRes.data.income)) {
-              // It might be wrapped in a property called 'income'
-              incomeData = incomeRes.data.income;
-            } else {
-              // Try to handle case where response is { "key1": {...}, "key2": {...} }
-              const potentialItems = Object.values(incomeRes.data).filter(
-                item => typeof item === 'object' && item !== null
-              );
-              if (potentialItems.length > 0) {
-                incomeData = potentialItems;
-              }
-            }
-          } else if (incomeRes.data === '') {
-            // Empty string response, usually means no data
-            console.log("Empty string response for income data");
-            incomeData = [];
-          }
-          console.log("Income data processed, count:", incomeData.length);
-        }
-      } catch (err) {
-        console.error("Error fetching income data:", err);
+        const response = await incomeService.getAll();
+        console.log("Income data fetched:", response);
+        return processApiResponse<Income>(response);
+      } catch (error) {
+        console.error("Error fetching income:", error);
+        throw error;
       }
-      
+    },
+    enabled: !!user, // Only run if user is logged in
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Fetch expenses data using React Query
+  const { 
+    data: expenses = [], 
+    isLoading: expensesLoading,
+    error: expensesError
+  } = useQuery({
+    queryKey: ['expenses'],
+    queryFn: async () => {
       try {
         console.log("Fetching expenses data...");
-        const expensesRes = await expenseService.getAll();
-        console.log("Raw expenses response status:", expensesRes.status);
-        console.log("Raw expenses response data type:", typeof expensesRes.data);
-        console.log("Raw expenses response data:", expensesRes.data);
-        
-        if (expensesRes && expensesRes.data !== undefined) {
-          // Handle both array responses and responses where data is nested
-          if (Array.isArray(expensesRes.data)) {
-            expensesData = expensesRes.data;
-          } else if (expensesRes.data.results && Array.isArray(expensesRes.data.results)) {
-            expensesData = expensesRes.data.results;
-          } else if (typeof expensesRes.data === 'object' && expensesRes.data !== null) {
-            // It could be a single item
-            if (expensesRes.data.id || expensesRes.data._id) {
-              expensesData = [expensesRes.data];
-            } else if (expensesRes.data.expenses && Array.isArray(expensesRes.data.expenses)) {
-              // It might be wrapped in a property called 'expenses'
-              expensesData = expensesRes.data.expenses;
-            } else {
-              // Try to handle case where response is { "key1": {...}, "key2": {...} }
-              const potentialItems = Object.values(expensesRes.data).filter(
-                item => typeof item === 'object' && item !== null
-              );
-              if (potentialItems.length > 0) {
-                expensesData = potentialItems;
-              }
-            }
-          } else if (expensesRes.data === '') {
-            // Empty string response, usually means no data
-            console.log("Empty string response for expenses data");
-            expensesData = [];
-          }
-          console.log("Expenses data processed, count:", expensesData.length);
-        }
-      } catch (err) {
-        console.error("Error fetching expenses data:", err);
+        const response = await expenseService.getAll();
+        console.log("Expenses data fetched:", response);
+        return processApiResponse<Expense>(response);
+      } catch (error) {
+        console.error("Error fetching expenses:", error);
+        throw error;
       }
-      
+    },
+    enabled: !!user, // Only run if user is logged in
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Fetch goals data using React Query
+  const { 
+    data: goals = [], 
+    isLoading: goalsLoading,
+    error: goalsError
+  } = useQuery({
+    queryKey: ['goals'],
+    queryFn: async () => {
       try {
         console.log("Fetching goals data...");
-        const goalsRes = await goalService.getAll();
-        console.log("Raw goals response status:", goalsRes.status);
-        console.log("Raw goals response data type:", typeof goalsRes.data);
-        console.log("Raw goals response data:", goalsRes.data);
-        
-        if (goalsRes && goalsRes.data !== undefined) {
-          // Handle both array responses and responses where data is nested
-          if (Array.isArray(goalsRes.data)) {
-            goalsData = goalsRes.data;
-          } else if (goalsRes.data.results && Array.isArray(goalsRes.data.results)) {
-            goalsData = goalsRes.data.results;
-          } else if (typeof goalsRes.data === 'object' && goalsRes.data !== null) {
-            // It could be a single item
-            if (goalsRes.data.id || goalsRes.data._id) {
-              goalsData = [goalsRes.data];
-            } else if (goalsRes.data.goals && Array.isArray(goalsRes.data.goals)) {
-              // It might be wrapped in a property called 'goals'
-              goalsData = goalsRes.data.goals;
-            } else {
-              // Try to handle case where response is { "key1": {...}, "key2": {...} }
-              const potentialItems = Object.values(goalsRes.data).filter(
-                item => typeof item === 'object' && item !== null
-              );
-              if (potentialItems.length > 0) {
-                goalsData = potentialItems;
-              }
-            }
-          } else if (goalsRes.data === '') {
-            // Empty string response, usually means no data
-            console.log("Empty string response for goals data");
-            goalsData = [];
-          }
-          console.log("Goals data processed, count:", goalsData.length);
-        }
-      } catch (err) {
-        console.error("Error fetching goals data:", err);
+        const response = await goalService.getAll();
+        console.log("Goals data fetched:", response);
+        return processApiResponse<Goal>(response);
+      } catch (error) {
+        console.error("Error fetching goals:", error);
+        throw error;
       }
-      
+    },
+    enabled: !!user, // Only run if user is logged in
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Fetch budgets data using React Query
+  const { 
+    data: budgets = [], 
+    isLoading: budgetsLoading,
+    error: budgetsError
+  } = useQuery({
+    queryKey: ['budgets'],
+    queryFn: async () => {
       try {
         console.log("Fetching budgets data...");
-        const budgetsRes = await budgetService.getAll();
-        console.log("Raw budgets response status:", budgetsRes.status);
-        console.log("Raw budgets response data type:", typeof budgetsRes.data);
-        console.log("Raw budgets response data:", budgetsRes.data);
-        
-        if (budgetsRes && budgetsRes.data !== undefined) {
-          // Handle both array responses and responses where data is nested
-          if (Array.isArray(budgetsRes.data)) {
-            budgetsData = budgetsRes.data;
-          } else if (budgetsRes.data.results && Array.isArray(budgetsRes.data.results)) {
-            budgetsData = budgetsRes.data.results;
-          } else if (typeof budgetsRes.data === 'object' && budgetsRes.data !== null) {
-            // It could be a single item
-            if (budgetsRes.data.id || budgetsRes.data._id) {
-              budgetsData = [budgetsRes.data];
-            } else if (budgetsRes.data.budgets && Array.isArray(budgetsRes.data.budgets)) {
-              // It might be wrapped in a property called 'budgets'
-              budgetsData = budgetsRes.data.budgets;
-            } else {
-              // Try to handle case where response is { "key1": {...}, "key2": {...} }
-              const potentialItems = Object.values(budgetsRes.data).filter(
-                item => typeof item === 'object' && item !== null
-              );
-              if (potentialItems.length > 0) {
-                budgetsData = potentialItems;
-              }
-            }
-          } else if (budgetsRes.data === '') {
-            // Empty string response, usually means no data
-            console.log("Empty string response for budgets data");
-            budgetsData = [];
-          }
-          console.log("Budgets data processed, count:", budgetsData.length);
-        }
-      } catch (err) {
-        console.error("Error fetching budgets data:", err);
+        const response = await budgetService.getAll();
+        console.log("Budgets data fetched:", response);
+        return processApiResponse<Budget>(response);
+      } catch (error) {
+        console.error("Error fetching budgets:", error);
+        throw error;
       }
+    },
+    enabled: !!user, // Only run if user is logged in
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
-      // Set state with the retrieved data
-      setIncome(incomeData);
-      setExpenses(expensesData);
-      setGoals(goalsData);
-      setBudgets(budgetsData);
-      
-      console.log("All financial data fetched and state updated");
+  // If there's no data from the API, use test data for development
+  const isEmptyData = 
+    income.length === 0 && 
+    expenses.length === 0 && 
+    goals.length === 0 && 
+    budgets.length === 0;
+
+  const finalData = isEmptyData && !incomeLoading && !expensesLoading && !goalsLoading && !budgetsLoading
+    ? generateTestData()
+    : { incomeData: income, expensesData: expenses, goalsData: goals, budgetsData: budgets };
+
+  // Refresh data function for manual refreshes
+  const refreshData = async () => {
+    setError(null);
+    try {
+      await queryClient.invalidateQueries({ queryKey: ['income'] });
+      await queryClient.invalidateQueries({ queryKey: ['expenses'] });
+      await queryClient.invalidateQueries({ queryKey: ['goals'] });
+      await queryClient.invalidateQueries({ queryKey: ['budgets'] });
     } catch (err) {
-      console.error('Error in overall fetchData process:', err);
-      setError('Failed to fetch financial data. Please try again later.');
-    } finally {
-      setLoading(false);
+      console.error("Error refreshing data:", err);
+      setError("Failed to refresh financial data. Please try again later.");
     }
   };
 
-  // Fetch data when user changes
-  useEffect(() => {
-    if (user) {
-      fetchData();
-    }
-  }, [user]);
+  // Combine all errors
+  const combinedError = incomeError || expensesError || goalsError || budgetsError || error;
+  if (combinedError) {
+    console.error("Error in financial data:", combinedError);
+  }
 
-  const refreshData = async () => {
-    await fetchData();
+  // Set loading state
+  const loading = incomeLoading || expensesLoading || goalsLoading || budgetsLoading;
+
+  // Create context value
+  const value: FinanceContextType = {
+    income: finalData.incomeData as Income[],
+    expenses: finalData.expensesData as Expense[],
+    goals: finalData.goalsData as Goal[],
+    budgets: finalData.budgetsData as Budget[],
+    loading,
+    error: combinedError ? String(combinedError) : null,
+    refreshData
   };
 
   return (
-    <FinanceContext.Provider
-      value={{
-        income,
-        expenses,
-        goals,
-        budgets,
-        loading,
-        error,
-        refreshData,
-      }}
-    >
+    <FinanceContext.Provider value={value}>
       {children}
     </FinanceContext.Provider>
   );
 };
 
-// Hook to use Finance Context
+// Custom hook to use the finance context
 export const useFinance = () => {
   const context = useContext(FinanceContext);
   if (context === undefined) {

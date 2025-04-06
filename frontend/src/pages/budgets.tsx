@@ -81,10 +81,10 @@ import {
   PieChart as RechartsPieChart,
   Pie,
 } from "recharts";
-import { useFinance } from "@/context/FinanceContext";
-import { budgetService } from "@/services/api";
-import { LoadingSpinner } from "@/components/common/LoadingSpinner";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/components/ui/use-toast";
+import { useBudgets } from "@/hooks";
+import { LoadingSpinner } from "@/components/common/LoadingSpinner";
 
 interface BudgetItem {
   id: number;
@@ -105,6 +105,47 @@ interface Budget {
   startDate?: string;
   endDate?: string;
 }
+
+// Process API response to handle different formats
+const processApiResponse = <T extends unknown>(response: any): T[] => {
+  if (!response || response.data === undefined) return [];
+
+  // Handle different response formats
+  if (Array.isArray(response.data)) {
+    return response.data as T[];
+  } 
+  
+  if (response.data.results && Array.isArray(response.data.results)) {
+    return response.data.results as T[];
+  } 
+  
+  if (typeof response.data === 'object' && response.data !== null) {
+    // Handle single item
+    if (response.data.id || response.data._id) {
+      return [response.data] as T[];
+    }
+    
+    // Handle nested data
+    const dataKeys = ['income', 'expenses', 'goals', 'budgets'];
+    for (const key of dataKeys) {
+      if (response.data[key] && Array.isArray(response.data[key])) {
+        return response.data[key] as T[];
+      }
+    }
+    
+    // Handle object of objects case
+    const potentialItems = Object.values(response.data).filter(
+      item => typeof item === 'object' && item !== null
+    );
+    
+    if (potentialItems.length > 0) {
+      return potentialItems as T[];
+    }
+  }
+  
+  // Return empty array as fallback
+  return [];
+};
 
 // Map backend budget format to frontend format
 const mapBackendToFrontend = (backendBudget: any): Budget => {
@@ -195,24 +236,58 @@ const BudgetPage = () => {
     </div>
   );
 
-  const { budgets: backendBudgets, loading, error, refreshData } = useFinance();
+  const { addToast } = useToast();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Default closed on mobile
+  // Use our custom useBudgets hook
+  const {
+    budgets,
+    filteredBudgets,
+    currentBudget,
+    currentBudgetId,
+    setCurrentBudgetId,
+    activePeriod,
+    setActivePeriod,
+    isLoading,
+    error,
+    refetch,
+    currentStatus,
+    createBudget,
+    addBudgetItem,
+    deleteBudgetItem,
+    deleteBudget,
+    updateCategorySpending,
+    getBudgetStatus,
+    prepareChartData,
+    preparePieChartData,
+    mutations
+  } = useBudgets();
+  
+  // UI state only for components that don't conflict with the hook
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [activePeriod, setActivePeriod] = useState("daily"); // Set daily as default
   const [newBudgetDialogOpen, setNewBudgetDialogOpen] = useState(false);
   const [newItemDialogOpen, setNewItemDialogOpen] = useState(false);
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<number | null>(null);
   const [budgetToDelete, setBudgetToDelete] = useState<number | null>(null);
   const [deleteBudgetAlertOpen, setDeleteBudgetAlertOpen] = useState(false);
-  const [currentBudgetId, setCurrentBudgetId] = useState<number | null>(null);
-  const [activeChartView] = useState("bar"); // "bar" or "pie"
-  const currencySymbol = "₱"; // Add currency symbol
+  const [activeChartView] = useState("bar");
+  const currencySymbol = "₱";
+  
+  // State for user profile
+  const [openPopover, setOpenPopover] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [emailNotifications, setEmailNotifications] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [fullName, setFullName] = useState(user?.full_name || "");
+  const [email, setEmail] = useState(user?.email || "");
+  const [username, setUsername] = useState(user?.username || "");
 
   // State for new budget form
   const [newBudgetName, setNewBudgetName] = useState("");
-  const [newBudgetPeriod, setNewBudgetPeriod] = useState("daily");
+  const [newBudgetPeriod, setNewBudgetPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
   const [newBudgetStartDate, setNewBudgetStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [newBudgetEndDate, setNewBudgetEndDate] = useState("");
 
@@ -220,40 +295,24 @@ const BudgetPage = () => {
   const [newItemCategory, setNewItemCategory] = useState("");
   const [newItemPlanned, setNewItemPlanned] = useState("");
   const [editingBudgetId, setEditingBudgetId] = useState<number | null>(null);
-  const navigate = useNavigate();
-
-  // Transform backend budgets to frontend format
-  const [localBudgets, setLocalBudgets] = useState<Budget[]>([]);
-  
-  // Map backend budgets to frontend format when they change
-  useEffect(() => {
-    if (backendBudgets && Array.isArray(backendBudgets)) {
-      console.log("Raw budgets data from backend:", backendBudgets);
-      const mappedBudgets = backendBudgets.map(mapBackendToFrontend);
-      setLocalBudgets(mappedBudgets);
-      
-      // Set the current budget ID if not set yet
-      if (mappedBudgets.length > 0 && !currentBudgetId) {
-        setCurrentBudgetId(mappedBudgets[0].id);
-      }
-    }
-  }, [backendBudgets, currentBudgetId]);
-
   const [isMobile, setIsMobile] = useState<boolean>(false);
+
+  // Format currency function 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-PH', {
+      style: 'currency',
+      currency: 'PHP',
+      minimumFractionDigits: 2
+    }).format(amount);
+  };
 
   // Check for mobile screen size
   useEffect(() => {
     const checkIfMobile = () => {
       setIsMobile(window.innerWidth < 768);
     };
-
-    // Initial check
     checkIfMobile();
-
-    // Add event listener
     window.addEventListener("resize", checkIfMobile);
-
-    // Cleanup
     return () => window.removeEventListener("resize", checkIfMobile);
   }, []);
 
@@ -284,129 +343,93 @@ const BudgetPage = () => {
   // Add a new budget
   const addNewBudget = async () => {
     if (!newBudgetName || !newBudgetPeriod || !newBudgetStartDate || !newBudgetEndDate) {
-      alert("Please fill in all required fields");
+      addToast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
       return;
     }
     
     try {
       const newBudgetData = {
         name: newBudgetName,
-        totalPlanned: 0, // Start with 0, will be updated when items are added
-        totalActual: 0,
+        period: newBudgetPeriod,
         startDate: newBudgetStartDate,
-        endDate: newBudgetEndDate,
-        period: newBudgetPeriod // Explicitly include the period
+        endDate: newBudgetEndDate
       };
       
       console.log("Creating new budget:", newBudgetData);
-      const response = await budgetService.create(newBudgetData);
+      await createBudget(newBudgetData);
       
-      if (response && response.data) {
-        await refreshData(); // Refresh data to get updated budgets
-        
-        setNewBudgetName("");
-        setNewBudgetPeriod("daily");
-        setNewBudgetDialogOpen(false);
-        
-        // Set new budget as current
-        setCurrentBudgetId(response.data.id);
-      }
+      // Reset the form
+      setNewBudgetName("");
+      setNewBudgetPeriod("daily");
+      setNewBudgetDialogOpen(false);
     } catch (error) {
       console.error("Error creating budget:", error);
-      alert("Failed to create budget. Please check console for details.");
+      addToast({
+        title: "Error",
+        description: "Failed to create budget",
+        variant: "destructive",
+      });
     }
   };
 
   // Add a new item to a budget
-  const addNewBudgetItem = () => {
-    if (!newItemCategory || !newItemPlanned || !editingBudgetId) return;
+  const addNewBudgetItem = async () => {
+    if (!newItemCategory || !newItemPlanned || !editingBudgetId) {
+      addToast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
     
-    const updatedBudgets = localBudgets.map((budget) => {
-      if (budget.id === editingBudgetId) {
-        const newItem = {
-          id:
-            budget.items.length > 0
-              ? Math.max(...budget.items.map((item) => item.id)) + 1
-              : 1,
-          category: newItemCategory,
-          planned: parseFloat(newItemPlanned),
-          actual: 0,
-          remaining: parseFloat(newItemPlanned),
-          progress: 0,
-        };
-        const updatedItems = [...budget.items, newItem];
-        const totalPlanned = updatedItems.reduce(
-          (sum, item) => sum + item.planned,
-          0
-        );
-        const totalActual = updatedItems.reduce(
-          (sum, item) => sum + item.actual,
-          0
-        );
-        
-        // Update backend budget with new items and totals
-        updateBackendBudget(budget.id, { 
-          ...budget,
-          items: updatedItems,
-          totalPlanned,
-          totalActual
-        });
-        
-        return {
-          ...budget,
-          items: updatedItems,
-          totalPlanned,
-          totalActual,
-        };
-      }
-      return budget;
-    });
-    
-    setLocalBudgets(updatedBudgets);
-    setNewItemCategory("");
-    setNewItemPlanned("");
-    setNewItemDialogOpen(false);
+    try {
+      // Create the budget item data
+      const itemData = {
+        category: newItemCategory,
+        planned: parseFloat(newItemPlanned)
+      };
+      
+      // Call the hook function
+      await addBudgetItem(editingBudgetId, itemData);
+      
+      // Reset form and close dialog
+      setNewItemCategory("");
+      setNewItemPlanned("");
+      setNewItemDialogOpen(false);
+      
+    } catch (error) {
+      console.error("Error adding budget item:", error);
+      addToast({
+        title: "Error",
+        description: "Failed to add budget item",
+        variant: "destructive",
+      });
+    }
   };
 
   // Delete a budget item
-  const handleDeleteItem = () => {
-    if (!itemToDelete || !editingBudgetId) return;
+  const handleDeleteItem = async () => {
+    if (!currentBudgetId || !itemToDelete) return;
     
-    const updatedBudgets = localBudgets.map((budget) => {
-      if (budget.id === editingBudgetId) {
-        const updatedItems = budget.items.filter(
-          (item) => item.id !== itemToDelete
-        );
-        const totalPlanned = updatedItems.reduce(
-          (sum, item) => sum + item.planned,
-          0
-        );
-        const totalActual = updatedItems.reduce(
-          (sum, item) => sum + item.actual,
-          0
-        );
-        
-        // Update backend budget with new items and totals
-        updateBackendBudget(budget.id, { 
-          ...budget,
-          items: updatedItems,
-          totalPlanned,
-          totalActual
-        });
-        
-        return {
-          ...budget,
-          items: updatedItems,
-          totalPlanned,
-          totalActual,
-        };
-      }
-      return budget;
-    });
-    
-    setLocalBudgets(updatedBudgets);
-    setItemToDelete(null);
-    setDeleteAlertOpen(false);
+    try {
+      // Call the hook's deleteBudgetItem function
+      await deleteBudgetItem(currentBudgetId, itemToDelete);
+      
+      setDeleteAlertOpen(false);
+      setItemToDelete(null);
+    } catch (error) {
+      console.error("Error deleting budget item:", error);
+      addToast({
+        title: "Error",
+        description: "Failed to delete budget item",
+        variant: "destructive",
+      });
+    }
   };
 
   // Delete a budget
@@ -414,218 +437,80 @@ const BudgetPage = () => {
     if (!budgetToDelete) return;
     
     try {
-      await budgetService.delete(budgetToDelete);
+      // Call the hook's deleteBudget function
+      await deleteBudget(budgetToDelete);
       
-      // Remove items from localStorage
-      try {
-        localStorage.removeItem(`budget_items_${budgetToDelete}`);
-        
-        // Remove period from localStorage
-        const periodMap = JSON.parse(localStorage.getItem('budget_periods') || '{}');
-        if (periodMap[budgetToDelete]) {
-          delete periodMap[budgetToDelete];
-          localStorage.setItem('budget_periods', JSON.stringify(periodMap));
-        }
-      } catch (e) {
-        console.error("Error removing budget data from localStorage:", e);
-      }
-      
-      // Update frontend state
-      const updatedBudgets = localBudgets.filter(
-        (budget) => budget.id !== budgetToDelete
-      );
-      setLocalBudgets(updatedBudgets);
-      
-      // If we're deleting the current budget, switch to another one
-      if (updatedBudgets.length > 0 && currentBudgetId === budgetToDelete) {
-        setCurrentBudgetId(updatedBudgets[0].id);
-      } else if (updatedBudgets.length === 0) {
-        setCurrentBudgetId(null);
-      }
-      
-      setBudgetToDelete(null);
       setDeleteBudgetAlertOpen(false);
+      setBudgetToDelete(null);
       
-      // Refresh data from backend
-      await refreshData();
+      // If we're deleting the current budget, the hook will handle selecting another one
     } catch (error) {
       console.error("Error deleting budget:", error);
-      alert("Failed to delete budget. Please check console for details.");
-    }
-  };
-
-  // Helper function to update a budget in the backend
-  const updateBackendBudget = async (id: number, budget: Budget) => {
-    try {
-      await budgetService.update(id, {
-        name: budget.name,
-        totalPlanned: budget.totalPlanned,
-        totalActual: budget.totalActual,
-        startDate: budget.startDate,
-        endDate: budget.endDate,
-        period: budget.period, // Make sure to include period
-        items: budget.items // Include all items
+      addToast({
+        title: "Error",
+        description: "Failed to delete budget",
+        variant: "destructive",
       });
-      console.log(`Successfully updated budget ${id} with period ${budget.period}`);
-    } catch (error) {
-      console.error(`Error updating budget ${id}:`, error);
-      // Show an error message to the user
-      // Instead of automatically redirecting on auth errors (which is now handled in api.ts),
-      // we provide feedback to the user here
-      alert(`There was an error updating your budget. Check the console for details or try reloading the page.`);
     }
   };
 
-  // Filter budgets by period type
-  const filteredBudgets = useMemo(() => {
-    return localBudgets.filter(budget => budget.period === activePeriod);
-  }, [localBudgets, activePeriod]);
-
-  // Get current budget
-  const currentBudget = useMemo(() => {
-    return localBudgets.find(budget => budget.id === currentBudgetId) || filteredBudgets[0];
-  }, [localBudgets, currentBudgetId, filteredBudgets]);
-
-  // Function to update budget category spending
-  const updateActualSpending = (
+  // Update budget category spending
+  const updateActualSpending = async (
     budgetId: number,
     itemId: number,
-    amount: string
+    amountStr: string
   ) => {
-    const updatedBudgets = localBudgets.map((budget) => {
-      if (budget.id === budgetId) {
-        const updatedItems = budget.items.map((item) => {
-          if (item.id === itemId) {
-            const actual = parseFloat(amount) || 0;
-            const remaining = item.planned - actual;
-            const progress =
-              item.planned > 0
-                ? Math.min(100, (actual / item.planned) * 100)
-                : 0;
-            return {
-              ...item,
-              actual,
-              remaining,
-              progress,
-            };
-          }
-          return item;
-        });
-        const totalActual = updatedItems.reduce(
-          (sum, item) => sum + item.actual,
-          0
-        );
-        
-        // Update backend budget with new items and totals
-        updateBackendBudget(budget.id, { 
-          ...budget,
-          items: updatedItems,
-          totalActual
-        });
-        
-        return {
-          ...budget,
-          items: updatedItems,
-          totalActual,
-        };
-      }
-      return budget;
-    });
+    if (!budgetId) return;
     
-    setLocalBudgets(updatedBudgets);
-  };
-
-  // Calculate overall budget status
-  const getBudgetStatus = (budget: Budget | undefined) => {
-    if (!budget) return { status: "N/A", color: "gray" };
-    const percentSpent =
-      budget.totalPlanned > 0
-        ? (budget.totalActual / budget.totalPlanned) * 100
-        : 0;
-    if (percentSpent > 90) {
-      return { status: "Critical", color: "red" };
-    } else if (percentSpent > 75) {
-      return { status: "Warning", color: "orange" };
-    } else {
-      return { status: "Good", color: "green" };
-    }
-  };
-
-  // Get current budget status
-  const currentStatus = useMemo(() => {
-    return currentBudget ? getBudgetStatus(currentBudget) : { status: "N/A", color: "gray" };
-  }, [currentBudget]);
-
-  // Prepare chart data
-  const prepareChartData = () => {
-    if (!currentBudget || currentBudget.items.length === 0) return [];
-    return currentBudget.items.map((item) => ({
-      name: item.category,
-      planned: item.planned,
-      actual: item.actual,
-      remaining: item.remaining,
-    }));
-  };
-
-  // Prepare pie chart data
-  const preparePieChartData = () => {
-    if (!currentBudget || currentBudget.items.length === 0) return [];
-    return currentBudget.items.map((item) => ({
-      name: item.category,
-      value: item.actual > 0 ? item.actual : 0,
-    }));
-  };
-
-  // Get user data from auth context
-  const { user } = useAuth();
-  
-  // Initialize state with values from user context if available
-  const [fullName, setFullName] = useState(user?.full_name || "");
-  const [email, setEmail] = useState(user?.email || "");
-  const [username, setUsername] = useState(user?.username || "");
-  const [isEditing, setIsEditing] = useState(false);
-  const [openPopover, setOpenPopover] = useState(false);
-  const [emailNotifications, setEmailNotifications] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-
-  // Update the useEffect to use activePeriod instead of newBudgetPeriod
-  useEffect(() => {
-    // When tab changes, try to find a budget in the new period
-    if (activePeriod) {
-      // Filter budgets by the new active period
-      const budgetsInPeriod = localBudgets.filter(budget => budget.period === activePeriod);
-      
-      // If there are budgets in this period, select the first one
-      if (budgetsInPeriod.length > 0) {
-        setCurrentBudgetId(budgetsInPeriod[0].id);
-      } else {
-        // If no budgets in this period, don't show any budget
-        setCurrentBudgetId(null);
+    try {
+      const amount = parseFloat(amountStr);
+      if (isNaN(amount) || amount < 0) {
+        addToast({
+          title: "Error",
+          description: "Please enter a valid amount",
+          variant: "destructive",
+        });
+        return;
       }
+      
+      // Use the hook function to update category spending
+      await updateCategorySpending(budgetId, itemId, amount);
+    } catch (error) {
+      console.error("Error updating category spending:", error);
+      addToast({
+        title: "Error",
+        description: "Failed to update spending",
+        variant: "destructive",
+      });
     }
-  }, [activePeriod, localBudgets]);
+  };
 
-  if (loading) {
-    return <LoadingSpinner />;
+  // Fix Tabs onValueChange type
+  const handlePeriodChange = (value: string) => {
+    setActivePeriod(value as "daily" | "weekly" | "monthly");
+  };
+
+  // Handler for the newBudgetPeriod selection
+  const handleNewBudgetPeriodChange = (value: string) => {
+    setNewBudgetPeriod(value as "daily" | "weekly" | "monthly");
+  };
+
+  // Loading state handler
+  if (isLoading) {
+    return <LoadingSpinner fullScreen />;
   }
 
+  // Error state handler
   if (error) {
+    console.error("Error loading budgets:", error);
     return (
-      <div className="flex items-center justify-center h-screen bg-indigo-100">
-        <Card className="w-full max-w-md p-6">
-          <CardHeader>
-            <CardTitle className="text-red-500">Error</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p>{error}</p>
-            <Button 
-              onClick={refreshData} 
-              className="mt-4 bg-indigo-500 hover:bg-indigo-600 text-white"
-            >
-              Retry
-            </Button>
-          </CardContent>
-        </Card>
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+        <h1 className="text-2xl font-bold mb-2">Error Loading Budgets</h1>
+        <p className="text-gray-600 mb-6">
+          We couldn't load your budget data. Please try again later.
+        </p>
+        <Button onClick={() => window.location.reload()}>Retry</Button>
       </div>
     );
   }
@@ -902,9 +787,9 @@ const BudgetPage = () => {
           {/* Budget Type Tabs */}
           <div className="flex justify-between items-center mb-6">
             <Tabs
-              defaultValue="daily"
+              defaultValue={activePeriod}
               value={activePeriod}
-              onValueChange={setActivePeriod}
+              onValueChange={handlePeriodChange}
               className="w-full"
             >
               <TabsList className="w-full max-w-md mb-2">
@@ -952,9 +837,18 @@ const BudgetPage = () => {
                   setNewBudgetEndDate(endDate.toISOString().split('T')[0]);
                   setNewBudgetDialogOpen(true);
                 }}
-                className=" bg-indigo-400 hover:bg-indigo-600 w-fit"
+                className="bg-indigo-500 hover:bg-indigo-600 text-white w-fit"
+                disabled={mutations.create.isPending}
               >
-                <Plus className="mr-2 h-4 w-4" /> Create New Budget
+                {mutations.create.isPending ? (
+                  <>
+                    <LoadingSpinner size="sm" className="mr-2" /> Creating...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="mr-2 h-4 w-4" /> Create New Budget
+                  </>
+                )}
               </Button>
               <div className="flex gap-4 mt-2 flex-wrap">
                 {filteredBudgets.map((budget) => (
@@ -986,6 +880,7 @@ const BudgetPage = () => {
                             setBudgetToDelete(budget.id);
                             setDeleteBudgetAlertOpen(true);
                           }}
+                          disabled={mutations.delete.isPending}
                         >
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
@@ -1026,8 +921,7 @@ const BudgetPage = () => {
                         Planned Budget
                       </h3>
                       <p className="text-2xl font-bold">
-                        {currencySymbol}
-                        {currentBudget.totalPlanned.toFixed(2)}
+                        {formatCurrency(currentBudget.totalPlanned)}
                       </p>
                     </div>
                     <div className="bg-gray-100 p-4 rounded-lg">
@@ -1035,8 +929,7 @@ const BudgetPage = () => {
                         Money Spent
                       </h3>
                       <p className="text-2xl font-bold">
-                        {currencySymbol}
-                        {currentBudget.totalActual.toFixed(2)}
+                        {formatCurrency(currentBudget.totalActual)}
                       </p>
                     </div>
                     <div className="bg-gray-100 p-4 rounded-lg">
@@ -1044,10 +937,7 @@ const BudgetPage = () => {
                         Remaining Money
                       </h3>
                       <p className="text-2xl font-bold">
-                        {currencySymbol}
-                        {(
-                          currentBudget.totalPlanned - currentBudget.totalActual
-                        ).toFixed(2)}
+                        {formatCurrency(currentBudget.totalPlanned - currentBudget.totalActual)}
                       </p>
                     </div>
                   </div>
@@ -1068,7 +958,7 @@ const BudgetPage = () => {
                           <ResponsiveContainer width="100%" height="100%">
                             {activeChartView === "bar" ? (
                               <RechartsBarChart
-                                data={prepareChartData()}
+                                data={prepareChartData(currentBudget)}
                                 margin={{
                                   top: 20,
                                   right: 30,
@@ -1085,7 +975,7 @@ const BudgetPage = () => {
                                 />
                                 <YAxis />
                                 <Tooltip
-                                  formatter={(value) => `${currencySymbol}${value}`}
+                                  formatter={(value) => formatCurrency(Number(value))}
                                 />
                                 <Legend verticalAlign="top" />
                                 <Bar
@@ -1098,7 +988,7 @@ const BudgetPage = () => {
                             ) : (
                               <RechartsPieChart>
                                 <Pie
-                                  data={preparePieChartData()}
+                                  data={preparePieChartData(currentBudget)}
                                   cx="50%"
                                   cy="50%"
                                   labelLine={true}
@@ -1110,7 +1000,7 @@ const BudgetPage = () => {
                                   dataKey="value"
                                 ></Pie>
                                 <Tooltip
-                                  formatter={(value) => `${currencySymbol}${value}`}
+                                  formatter={(value) => formatCurrency(Number(value))}
                                 />
                                 <Legend />
                               </RechartsPieChart>
@@ -1132,13 +1022,22 @@ const BudgetPage = () => {
                     <CardHeader className="flex flex-row items-center justify-between">
                       <CardTitle>Budget Categories</CardTitle>
                       <Button
-                        className="bg-indigo-400 hover:bg-indigo-600"
+                        className="bg-indigo-500 hover:bg-indigo-600 text-white"
                         onClick={() => {
                           setEditingBudgetId(currentBudget.id);
                           setNewItemDialogOpen(true);
                         }}
+                        disabled={mutations.update.isPending}
                       >
-                        <Plus className="mr-2 h-4 w-4" /> Add Category
+                        {mutations.update.isPending ? (
+                          <>
+                            <LoadingSpinner size="sm" className="mr-2" /> Adding...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="mr-2 h-4 w-4" /> Add Category
+                          </>
+                        )}
                       </Button>
                     </CardHeader>
                     <CardContent className="flex-grow overflow-auto">
@@ -1167,8 +1066,7 @@ const BudgetPage = () => {
                                     {item.category}
                                   </TableCell>
                                   <TableCell className="text-center">
-                                    {currencySymbol}
-                                    {item.planned.toFixed(2)}
+                                    {formatCurrency(item.planned)}
                                   </TableCell>
                                   <TableCell className="text-center">
                                     <div className="flex justify-center items-center gap-2">
@@ -1183,12 +1081,12 @@ const BudgetPage = () => {
                                           )
                                         }
                                         className="w-20 text-right"
+                                        disabled={mutations.update.isPending}
                                       />
                                     </div>
                                   </TableCell>
                                   <TableCell className="text-center">
-                                    {currencySymbol}
-                                    {item.remaining.toFixed(2)}
+                                    {formatCurrency(item.remaining)}
                                   </TableCell>
                                   <TableCell className="text-right">
                                     <Button
@@ -1199,6 +1097,7 @@ const BudgetPage = () => {
                                         setEditingBudgetId(currentBudget.id);
                                         setDeleteAlertOpen(true);
                                       }}
+                                      disabled={mutations.update.isPending}
                                     >
                                       <Trash2 className="h-4 w-4 text-red-500" />
                                     </Button>
@@ -1228,7 +1127,7 @@ const BudgetPage = () => {
                 <Button
                   onClick={() => {
                     // Pre-set the period based on the active tab
-                    setNewBudgetPeriod(activePeriod as "daily" | "weekly" | "monthly");
+                    setNewBudgetPeriod(activePeriod);
                     console.log("Setting budget period to:", activePeriod);
                     
                     // Set default dates based on period
@@ -1250,10 +1149,19 @@ const BudgetPage = () => {
                     setNewBudgetEndDate(endDate.toISOString().split('T')[0]);
                     setNewBudgetDialogOpen(true);
                   }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  className="bg-indigo-500 hover:bg-indigo-600 text-white"
+                  disabled={mutations.create.isPending}
                 >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create New Budget
+                  {mutations.create.isPending ? (
+                    <>
+                      <LoadingSpinner size="sm" className="mr-2" /> Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create New Budget
+                    </>
+                  )}
                 </Button>
               </div>
             )
@@ -1362,7 +1270,7 @@ const BudgetPage = () => {
               <Label htmlFor="budget-period">Budget Period</Label>
               <Select
                 value={newBudgetPeriod}
-                onValueChange={setNewBudgetPeriod}
+                onValueChange={handleNewBudgetPeriodChange}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={`${newBudgetPeriod.charAt(0).toUpperCase() + newBudgetPeriod.slice(1)} Budget`} />
@@ -1390,10 +1298,9 @@ const BudgetPage = () => {
                 type="date"
                 value={newBudgetEndDate}
                 onChange={(e) => setNewBudgetEndDate(e.target.value)}
-                readOnly={newBudgetPeriod !== "custom"}
               />
               <div className="text-xs text-muted-foreground">
-                {newBudgetPeriod !== "custom" && "End date is calculated based on the period selected."}
+                End date is calculated based on the period selected.
               </div>
             </div>
           </div>
@@ -1401,7 +1308,12 @@ const BudgetPage = () => {
             <Button variant="outline" onClick={() => setNewBudgetDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={addNewBudget}>Create Budget</Button>
+            <Button 
+              onClick={addNewBudget} 
+              disabled={mutations.create.isPending}
+            >
+              {mutations.create.isPending ? "Creating..." : "Create Budget"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1426,7 +1338,7 @@ const BudgetPage = () => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="item-planned">Planned Amount ({currencySymbol})</Label>
+              <Label htmlFor="item-planned">Planned Amount</Label>
               <Input
                 id="item-planned"
                 type="number"
@@ -1440,7 +1352,12 @@ const BudgetPage = () => {
             <Button variant="outline" onClick={() => setNewItemDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={addNewBudgetItem}>Add Category</Button>
+            <Button 
+              onClick={addNewBudgetItem}
+              disabled={mutations.update.isPending}
+            >
+              {mutations.update.isPending ? "Adding..." : "Add Category"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1462,8 +1379,9 @@ const BudgetPage = () => {
             <AlertDialogAction
               onClick={handleDeleteItem}
               className="bg-red-500 hover:bg-red-600 text-white"
+              disabled={mutations.update.isPending}
             >
-              Delete
+              {mutations.update.isPending ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1489,8 +1407,9 @@ const BudgetPage = () => {
             <AlertDialogAction
               onClick={handleDeleteBudget}
               className="bg-red-500 hover:bg-red-600 text-white"
+              disabled={mutations.delete.isPending}
             >
-              Delete
+              {mutations.delete.isPending ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
