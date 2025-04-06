@@ -49,6 +49,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import { useFinance } from "@/context/FinanceContext";
 import {
   CardHeader,
   CardTitle,
@@ -63,50 +64,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
-// Import our custom hooks
-import { useIncome, useExpenses, useGoals } from "@/hooks";
 
 // Define types for the data structure
 interface ChartData {
   day: string;
   income: number;
   expenses: number;
-}
-
-// Income interface
-interface Income {
-  id: string;
-  name: string;
-  type: string;
-  amount: number;
-  date: string;
-  description?: string;
-  color?: string;
-}
-
-// Expense interface
-interface Expense {
-  id: string;
-  name: string;
-  type: string;
-  amount: number;
-  date: string;
-  description?: string;
-  color?: string;
-}
-
-// Goal interface
-interface Goal {
-  id: string;
-  name: string;
-  targetAmount?: number;
-  target_amount?: number;
-  amountSaved?: number;
-  current_amount?: number;
-  deadline?: string;
-  description?: string;
-  color?: string;
 }
 
 // Define prop types for the NavItem component
@@ -148,7 +111,6 @@ const NavItem: React.FC<NavItemProps> = ({
 const Dashboard: React.FC = () => {
   const { user, loading: authLoading, logout } = useAuth();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isMobile, setIsMobile] = useState<boolean>(false);
@@ -163,76 +125,63 @@ const Dashboard: React.FC = () => {
   const [emailNotifications, setEmailNotifications] = useState<boolean>(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(false);
 
-  // Use our custom hooks instead of direct TanStack Query
-  const { 
-    income: incomeData, 
-    isLoading: incomeLoading, 
-    error: incomeError,
-    totalIncome,
-    formatCurrency,
-    refetch: refetchIncome
-  } = useIncome();
+  const { income, expenses, goals, loading: financeLoading, error, refreshData } = useFinance();
 
-  const {
-    expenses: expensesData,
-    isLoading: expensesLoading,
-    error: expensesError,
-    totalExpenses,
-    refetch: refetchExpenses
-  } = useExpenses();
-
-  const {
-    goals: goalsData,
-    isLoading: goalsLoading,
-    error: goalsError,
-    refetch: refetchGoals
-  } = useGoals();
-
-  // Loading state from all hooks
-  const loading = incomeLoading || expensesLoading || goalsLoading;
-  
-  // Combined error from all hooks
-  const error = incomeError || expensesError || goalsError;
-
-  // Refresh data function for manual refreshes
-  const refreshData = async () => {
-    try {
-      await refetchIncome();
-      await refetchExpenses();
-      await refetchGoals();
-    } catch (err) {
-      console.error("Error refreshing data:", err);
-    }
-  };
-
-  // Calculate total savings from goals
-  const totalSavings = useMemo(() => {
-    return Array.isArray(goalsData) 
-      ? goalsData.reduce((sum, goal) => sum + (goal.amountSaved || 0), 0)
-      : 0;
-  }, [goalsData]);
+  // Calculate totals from context data with safety checks
+  const totalIncome = Array.isArray(income) 
+    ? income.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+    : 0;
+    
+  const totalExpenses = Array.isArray(expenses) 
+    ? expenses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+    : 0;
+    
+  const totalSavings = Array.isArray(goals) 
+    ? goals.reduce((sum, item) => {
+        const amount = typeof item.amountSaved !== 'undefined' 
+          ? Number(item.amountSaved) 
+          : (typeof item.current_amount !== 'undefined' ? Number(item.current_amount) : 0);
+        return sum + amount;
+      }, 0)
+    : 0;
     
   const netIncome = totalIncome - totalExpenses;
 
+  // Load saved colors from localStorage for visualization
+  useEffect(() => {
+    try {
+      // Load income colors
+      const incomeColors = JSON.parse(localStorage.getItem('incomeColors') || '{}');
+      console.log("Dashboard loaded income colors:", incomeColors);
+      
+      // Load expense colors
+      const expenseColors = JSON.parse(localStorage.getItem('expenseColors') || '{}');
+      console.log("Dashboard loaded expense colors:", expenseColors);
+    } catch (e) {
+      console.error("Error loading color data in dashboard:", e);
+    }
+  }, []);
+
   // Update chart data when income or expenses change
   useEffect(() => {
-    if (Array.isArray(incomeData) && Array.isArray(expensesData)) {
-      console.log("Updating chart data with:", { income: incomeData, expenses: expensesData });
+    if (Array.isArray(income) && Array.isArray(expenses)) {
+      console.log("Updating chart data with:", { income, expenses });
       
       // Group income and expenses by month
       const monthlyData = new Map<string, { income: number; expenses: number }>();
       
       // Process income
-      incomeData.forEach(item => {
+      income.forEach(item => {
         if (!item.date) return; // Skip items without dates
         
         try {
           const date = new Date(item.date);
           const month = date.toLocaleString('default', { month: 'short' });
           const current = monthlyData.get(month) || { income: 0, expenses: 0 };
+          const amount = Number(item.amount) || 0;
           monthlyData.set(month, { 
             ...current, 
-            income: current.income + item.amount
+            income: current.income + amount
           });
         } catch (e) {
           console.error("Error processing income item for chart:", item, e);
@@ -240,16 +189,17 @@ const Dashboard: React.FC = () => {
       });
 
       // Process expenses
-      expensesData.forEach(item => {
+      expenses.forEach(item => {
         if (!item.date) return; // Skip items without dates
         
         try {
           const date = new Date(item.date);
           const month = date.toLocaleString('default', { month: 'short' });
           const current = monthlyData.get(month) || { income: 0, expenses: 0 };
+          const amount = Number(item.amount) || 0;
           monthlyData.set(month, { 
             ...current, 
-            expenses: current.expenses + item.amount
+            expenses: current.expenses + amount
           });
         } catch (e) {
           console.error("Error processing expense item for chart:", item, e);
@@ -269,49 +219,60 @@ const Dashboard: React.FC = () => {
       console.log("Generated chart data:", chartDataArray);
       setChartData(chartDataArray);
     }
-  }, [incomeData, expensesData]);
+  }, [income, expenses]);
 
   // Get recent transactions with more reliable handling
   const recentTransactions = useMemo(() => {
     try {
-      if (!Array.isArray(incomeData) || !Array.isArray(expensesData)) {
+      if (!Array.isArray(income) || !Array.isArray(expenses)) {
         return [];
       }
       
       // Combine income and expenses with proper type labeling
       const allTransactions = [
-        ...incomeData.map(item => ({
-          id: item.id,
-          name: item.source,
-          amount: item.amount,
-          date: item.date || '',
+        ...income.map(item => ({
+          ...item,
           transactionType: 'income',
-          color: item.color
+          // Use the saved color from localStorage if available
+          color: (() => {
+            try {
+              const colors = JSON.parse(localStorage.getItem('incomeColors') || '{}');
+              return colors[item.id] || '#3B82F6'; // Default blue
+            } catch (e) {
+              return '#3B82F6'; // Default blue if error
+            }
+          })()
         })),
-        ...expensesData.map(item => ({
-          id: item.id,
-          name: item.type,
-          amount: item.amount,
-          date: item.date || '',
+        ...expenses.map(item => ({
+          ...item,
           transactionType: 'expense',
-          color: item.color
+          // Use the saved color from localStorage if available
+          color: (() => {
+            try {
+              const colors = JSON.parse(localStorage.getItem('expenseColors') || '{}');
+              return colors[item.id] || '#EF4444'; // Default red
+            } catch (e) {
+              return '#EF4444'; // Default red if error
+            }
+          })()
         }))
-      ];
+      ]
+      // Sort by date (most recent first)
+      .sort((a, b) => {
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      })
+      // Take only the 5 most recent
+      .slice(0, 5);
       
-      // Sort by date, most recent first
-      const sortedTransactions = allTransactions.sort((a, b) => {
-        const dateA = new Date(a.date || '').getTime();
-        const dateB = new Date(b.date || '').getTime();
-        return dateB - dateA; // Descending order
-      });
-      
-      // Take the 5 most recent transactions
-      return sortedTransactions.slice(0, 5);
-    } catch (error) {
-      console.error("Error processing recent transactions:", error);
+      console.log("Recent transactions:", allTransactions);
+      return allTransactions;
+    } catch (e) {
+      console.error("Error processing transactions:", e);
       return [];
     }
-  }, [incomeData, expensesData]);
+  }, [income, expenses]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -338,21 +299,21 @@ const Dashboard: React.FC = () => {
     navigate('/login');
   };
 
-  // Additional useEffect for error logging
+  // Add useEffect to properly map goal data
   useEffect(() => {
-    if (error) {
-      console.error("Error in dashboard component:", error);
+    if (goals && Array.isArray(goals) && goals.length > 0) {
+      console.log("Dashboard processing goals:", goals);
     }
-  }, [error]);
+  }, [goals]);
 
-  if (authLoading || loading) {
+  if (authLoading || financeLoading) {
     return <LoadingSpinner />;
   }
 
   if (!user) {
     return null;
   }
-  
+
   return (
     <div className="flex h-screen bg-indigo-100 overflow-hidden">
       {/* Sidebar */}
@@ -651,73 +612,73 @@ const Dashboard: React.FC = () => {
               </p>
               <div className="w-full h-[250px] sm:h-[300px] md:h-[350px] lg:h-[400px]">
                 {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
                       data={chartData}
-                    margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="colorIncome"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#3b82f6"
-                          stopOpacity={0.8}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#3b82f6"
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                      <linearGradient
-                        id="colorExpenses"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#ef4444"
-                          stopOpacity={0.8}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#ef4444"
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
+                      margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient
+                          id="colorIncome"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor="#3b82f6"
+                            stopOpacity={0.8}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor="#3b82f6"
+                            stopOpacity={0}
+                          />
+                        </linearGradient>
+                        <linearGradient
+                          id="colorExpenses"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor="#ef4444"
+                            stopOpacity={0.8}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor="#ef4444"
+                            stopOpacity={0}
+                          />
+                        </linearGradient>
+                      </defs>
 
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="day" />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="day" />
                       <YAxis tickFormatter={(value) => formatCurrency(value).replace('.00', '')} />
                       <Tooltip 
                         formatter={(value: number) => formatCurrency(value)}
                         labelFormatter={(label) => `${label}`}
                       />
-                    <Area
-                      type="monotone"
-                      dataKey="income"
+                      <Area
+                        type="monotone"
+                        dataKey="income"
                         name="Income"
-                      stroke="#3b82f6"
-                      fill="url(#colorIncome)"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="expenses"
+                        stroke="#3b82f6"
+                        fill="url(#colorIncome)"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="expenses"
                         name="Expenses"
-                      stroke="#ef4444"
-                      fill="url(#colorExpenses)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                        stroke="#ef4444"
+                        fill="url(#colorExpenses)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full">
                     <p className="text-gray-500 mb-2">No transaction data available yet</p>
@@ -755,33 +716,38 @@ const Dashboard: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recentTransactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: transaction.color }}
-                          />
-                          {transaction.name}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {transaction.date
-                          ? formatDate(new Date(transaction.date))
-                          : "N/A"}
-                      </TableCell>
-                      <TableCell
-                        className={
-                          transaction.transactionType === "income"
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }
-                      >
-                        {formatCurrency(transaction.amount)}
+                  {recentTransactions.length > 0 ? (
+                    recentTransactions.map((transaction) => (
+                      <TableRow key={transaction.id || transaction._id}>
+                        <TableCell>{formatDate(transaction.date)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: transaction.color }}
+                            ></div>
+                            <span>{transaction.name || transaction.type}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{transaction.description || `-`}</TableCell>
+                        <TableCell 
+                          className={`text-right ${
+                            transaction.transactionType === 'income' 
+                              ? 'text-green-600' 
+                              : 'text-red-600'
+                          }`}
+                        >
+                          {formatCurrency(Number(transaction.amount) || 0)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-gray-500">
+                        No recent transactions
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -793,33 +759,57 @@ const Dashboard: React.FC = () => {
               <CardTitle>Financial Goals</CardTitle>
             </CardHeader>
             <CardContent>
-              {goalsData && goalsData.length > 0 ? (
+              {goals && goals.length > 0 ? (
                 <div className="space-y-4">
-                  {goalsData.map((goal) => {
-                    // Calculate percentage progress
-                    const progressPercent = Math.min(
-                      100,
-                      ((goal.amountSaved / goal.targetAmount) * 100) || 0
-                    );
+                  {goals.map((goal) => {
+                    // Determine the correct property names based on API response
+                    const targetAmount = typeof goal.target_amount !== 'undefined' 
+                      ? parseFloat(String(goal.target_amount)) 
+                      : parseFloat(String(goal.targetAmount)) || 0;
+                      
+                    const amountSaved = typeof goal.current_amount !== 'undefined' 
+                      ? parseFloat(String(goal.current_amount)) 
+                      : parseFloat(String(goal.amountSaved)) || 0;
+                    
+                    // Ensure we don't divide by zero and cap progress at 100%
+                    const progress = targetAmount > 0 
+                      ? Math.min(Math.round((amountSaved / targetAmount) * 100), 100) 
+                      : 0;
+                      
+                    // Get goal name from either property
+                    const name = goal.name || 'Unnamed Goal';
+                    
+                    // Get goal ID
+                    const id = goal._id || goal.id;
+                    
+                    // Get deadline date
+                    const deadline = goal.deadline || null;
+                    
+                    console.log(`Goal "${name}" progress calculation:`, {
+                      targetAmount,
+                      amountSaved,
+                      progress
+                    });
                     
                     return (
-                      <div
-                        key={goal.id}
-                        className="flex flex-col space-y-1"
-                      >
-                        <div className="flex justify-between">
-                          <span className="text-sm font-medium">
-                            {goal.name}
-                          </span>
+                      <div key={id} className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-700">{name}</span>
                           <span className="text-sm text-gray-500">
-                            {formatCurrency(goal.amountSaved)} / {formatCurrency(goal.targetAmount)}
+                            {formatCurrency(amountSaved)} / {formatCurrency(targetAmount)}
                           </span>
                         </div>
-                        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-indigo-600 rounded-full"
-                            style={{ width: `${progressPercent}%` }}
-                          />
+                        <div className="w-full bg-gray-200 rounded-full h-2.5">
+                          <div 
+                            className="bg-blue-600 h-2.5 rounded-full" 
+                            style={{ width: `${progress}%` }}
+                          ></div>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-500">
+                          <span>{progress}% complete</span>
+                          <span>
+                            {deadline ? formatDate(deadline) : 'No deadline'}
+                          </span>
                         </div>
                       </div>
                     );

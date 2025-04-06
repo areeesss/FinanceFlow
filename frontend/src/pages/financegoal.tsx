@@ -60,12 +60,11 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useFinance } from "@/context/FinanceContext";
 import { goalService } from "@/services/api";
 import { LoadingSpinner } from "@/components/common/LoadingSpinner";
 import { formatCurrency } from "@/utils/format";
 import { useAuth } from "@/context/AuthContext";
-import { useToast } from "@/components/ui/use-toast";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Define TypeScript interfaces
 interface Goal {
@@ -76,7 +75,6 @@ interface Goal {
   progress: number;
   deadline: string;
   description?: string;
-  _id?: string;
 }
 
 interface Transaction {
@@ -89,47 +87,6 @@ interface Transaction {
   goalName?: string;
   goalId?: string;
 }
-
-// Process API response to handle different formats
-const processApiResponse = <T extends unknown>(response: any): T[] => {
-  if (!response || response.data === undefined) return [];
-
-  // Handle different response formats
-  if (Array.isArray(response.data)) {
-    return response.data as T[];
-  } 
-  
-  if (response.data.results && Array.isArray(response.data.results)) {
-    return response.data.results as T[];
-  } 
-  
-  if (typeof response.data === 'object' && response.data !== null) {
-    // Handle single item
-    if (response.data.id || response.data._id) {
-      return [response.data] as T[];
-    }
-    
-    // Handle nested data
-    const dataKeys = ['income', 'expenses', 'goals', 'budgets'];
-    for (const key of dataKeys) {
-      if (response.data[key] && Array.isArray(response.data[key])) {
-        return response.data[key] as T[];
-      }
-    }
-    
-    // Handle object of objects case
-    const potentialItems = Object.values(response.data).filter(
-      item => typeof item === 'object' && item !== null
-    );
-    
-    if (potentialItems.length > 0) {
-      return potentialItems as T[];
-    }
-  }
-  
-  // Return empty array as fallback
-  return [];
-};
 
 const FinanceGoal = () => {
   // Define prop types for the NavItem component
@@ -168,8 +125,6 @@ const FinanceGoal = () => {
     </div>
   );
 
-  const { addToast } = useToast();
-  const queryClient = useQueryClient();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); // Default closed on mobile
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isMobile, setIsMobile] = useState<boolean>(false);
@@ -206,129 +161,23 @@ const FinanceGoal = () => {
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
-  // TanStack Query to fetch goals
-  const { 
-    data: goalsData = [], 
-    isLoading,
-    error
-  } = useQuery({
-    queryKey: ['goals'],
-    queryFn: async () => {
-      try {
-        console.log("Fetching goals data...");
-        const response = await goalService.getAll();
-        console.log("Goals data fetched:", response);
-        return processApiResponse<any>(response);
-      } catch (error) {
-        console.error("Error fetching goals:", error);
-        throw error;
-      }
-    },
-    enabled: !!user, // Only run if user is logged in
-  });
-
-  // State to store processed goals data
+  const { goals, loading, error, refreshData } = useFinance();
   const [localGoals, setLocalGoals] = useState<Goal[]>([]);
 
-  // Process the raw goals data from the API
   useEffect(() => {
-    if (goalsData && Array.isArray(goalsData)) {
-      console.log("Raw goals data from backend:", goalsData);
-      setLocalGoals(goalsData.map(item => ({
+    if (goals && Array.isArray(goals)) {
+      console.log("Raw goals data from backend:", goals);
+      setLocalGoals(goals.map(item => ({
         id: item._id ? item._id.toString() : String(item.id),
         name: item.name || 'Unnamed Goal',
         targetAmount: Number(item.target_amount) || 0,
         amountSaved: Number(item.current_amount) || 0,
         progress: Number(item.progress) || 0,
         deadline: item.deadline || new Date().toISOString().split('T')[0],
-        description: item.description || '',
-        _id: item._id
+        description: item.description || ''
       })));
     }
-  }, [goalsData]);
-
-  // Define mutations for CRUD operations
-  const createGoalMutation = useMutation({
-    mutationFn: (data: any) => goalService.create(data),
-    onSuccess: () => {
-      addToast({
-        title: "Success",
-        description: "Goal added successfully",
-      });
-      setAddGoalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['goals'] });
-    },
-    onError: (error) => {
-      console.error("Error adding goal:", error);
-      addToast({
-        title: "Error",
-        description: "Failed to add goal",
-        variant: "destructive",
-      });
-    }
-  });
-
-  const updateGoalMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string, data: any }) => 
-      goalService.update(id, data),
-    onSuccess: () => {
-      addToast({
-        title: "Success",
-        description: "Goal updated successfully",
-      });
-      setEditGoalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['goals'] });
-    },
-    onError: (error) => {
-      console.error("Error updating goal:", error);
-      addToast({
-        title: "Error",
-        description: "Failed to update goal",
-        variant: "destructive",
-      });
-    }
-  });
-
-  const deleteGoalMutation = useMutation({
-    mutationFn: (id: string) => goalService.delete(id),
-    onSuccess: () => {
-      addToast({
-        title: "Success",
-        description: "Goal deleted successfully",
-      });
-      setDeleteGoalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ['goals'] });
-    },
-    onError: (error) => {
-      console.error("Failed to delete goal:", error);
-      addToast({
-        title: "Error",
-        description: "Failed to delete goal",
-        variant: "destructive",
-      });
-    }
-  });
-
-  // Add mutation for updating the amount
-  const updateGoalAmountMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string, data: any }) => 
-      goalService.update(id, data),
-    onSuccess: () => {
-      addToast({
-        title: "Success",
-        description: "Goal updated successfully",
-      });
-      queryClient.invalidateQueries({ queryKey: ['goals'] });
-    },
-    onError: (error) => {
-      console.error("Error updating goal amount:", error);
-      addToast({
-        title: "Error",
-        description: "Failed to update goal amount",
-        variant: "destructive",
-      });
-    }
-  });
+  }, [goals]);
 
   // New state for dialogs
   const [addGoalOpen, setAddGoalOpen] = useState(false);
@@ -452,21 +301,13 @@ const FinanceGoal = () => {
   // Function to handle adding a new goal
   const handleAddGoal = async () => {
     if (!newGoalName || !newGoalAmount || !newGoalDeadline) {
-      addToast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive",
-      });
+      alert("Please fill in all fields");
       return;
     }
 
     const targetAmount = parseFloat(newGoalAmount);
     if (isNaN(targetAmount) || targetAmount <= 0) {
-      addToast({
-        title: "Error",
-        description: "Please enter a valid target amount",
-        variant: "destructive",
-      });
+      alert("Please enter a valid target amount");
       return;
     }
 
@@ -482,42 +323,35 @@ const FinanceGoal = () => {
 
     try {
       console.log("Sending goal data to backend:", formattedGoal);
-      await createGoalMutation.mutateAsync(formattedGoal);
+      await goalService.create(formattedGoal);
+      await refreshData();
+    setAddGoalOpen(false);
     } catch (error) {
       console.error('Error adding goal:', error);
+      alert('Failed to add goal. Please check the console for details.');
     }
   };
 
   // Function to handle editing a goal
   const handleEditGoal = async () => {
     if (!currentGoal || !newGoalName || !newGoalAmount || !newGoalDeadline || !newSavedAmount) {
-      addToast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive",
-      });
+      alert("Please fill in all fields");
       return;
     }
 
     const targetAmount = parseFloat(newGoalAmount);
     if (isNaN(targetAmount) || targetAmount <= 0) {
-      addToast({
-        title: "Error",
-        description: "Please enter a valid target amount",
-        variant: "destructive",
-      });
+      alert("Please enter a valid target amount");
       return;
     }
 
     const amountSaved = parseFloat(newSavedAmount);
     if (isNaN(amountSaved) || amountSaved < 0) {
-      addToast({
-        title: "Error",
-        description: "Please enter a valid saved amount",
-        variant: "destructive",
-      });
+      alert("Please enter a valid saved amount");
       return;
     }
+
+    const newProgress = (amountSaved / targetAmount) * 100;
 
     // Format the data to match what the backend expects (field names match Django model)
     const updatedGoal = {
@@ -531,9 +365,12 @@ const FinanceGoal = () => {
 
     try {
       console.log("Updating goal with data:", updatedGoal);
-      await updateGoalMutation.mutateAsync({ id: currentGoal.id, data: updatedGoal });
+      await goalService.update(currentGoal.id, updatedGoal);
+      await refreshData();
+    setEditGoalOpen(false);
     } catch (error) {
       console.error('Error updating goal:', error);
+      alert('Failed to update goal. Please check the console for details.');
     }
   };
 
@@ -542,214 +379,197 @@ const FinanceGoal = () => {
     if (!currentGoal) return;
 
     try {
-      await deleteGoalMutation.mutateAsync(currentGoal.id);
+      await goalService.delete(currentGoal.id);
+      await refreshData();
+    setDeleteGoalOpen(false);
     } catch (error) {
       console.error('Error deleting goal:', error);
+      alert('Failed to delete goal');
     }
   };
 
-  // Function to handle adding funds to a goal
+  // Function to handle adding funds to a goal - fixed endpoint handling
   const handleAddFunds = async () => {
     if (!currentGoal || !fundsToAdd) {
-      addToast({
-        title: "Error",
-        description: "Please enter an amount to add",
-        variant: "destructive",
-      });
+      alert("Please enter an amount to add");
       return;
     }
 
     const amount = parseFloat(fundsToAdd);
     if (isNaN(amount) || amount <= 0) {
-      addToast({
-        title: "Error",
-        description: "Please enter a valid amount",
-        variant: "destructive",
-      });
+      alert("Please enter a valid amount");
       return;
     }
 
-    const updatedAmount = currentGoal.amountSaved + amount;
-    
-    const updatedGoal = {
-      name: currentGoal.name,
-      target_amount: currentGoal.targetAmount,
-      current_amount: updatedAmount,
-      deadline: currentGoal.deadline,
-      description: `Goal for ${currentGoal.name}`
-    };
-    
-    updateGoalAmountMutation.mutate({ 
-      id: currentGoal.id, 
-      data: updatedGoal 
-    }, {
-      onSuccess: async () => {
-        // Save the transaction
-        await saveGoalTransaction(currentGoal.id, {
-          type: 'deposit',
-          amount: amount,
-          description: transactionDescription || `Added funds to ${currentGoal.name}`,
-          balance: updatedAmount
-        });
-        
-        setAddFundsOpen(false);
-      }
-    });
+    try {
+      console.log(`Adding ${amount} funds to goal ${currentGoal.id}`);
+
+      // Calculate new amount and update using the correct field names
+      const updatedAmount = currentGoal.amountSaved + amount;
+      
+      const updatedGoal = {
+      ...currentGoal,
+        current_amount: updatedAmount,
+        // Don't need to send progress as it's calculated by the backend
+        // Convert targetAmount to target_amount for the backend
+        target_amount: currentGoal.targetAmount,
+        // Keep other fields the same but with correct names
+        name: currentGoal.name,
+        deadline: currentGoal.deadline,
+        description: `Goal for ${currentGoal.name}`
+      };
+      
+      await goalService.update(currentGoal.id, updatedGoal);
+      
+      // Save the transaction
+      await saveGoalTransaction(currentGoal.id, {
+        type: 'deposit',
+        amount: amount,
+        description: transactionDescription || `Added funds to ${currentGoal.name}`,
+        balance: updatedAmount
+      });
+      
+      await refreshData();
+            setAddFundsOpen(false);
+    } catch (error) {
+      console.error('Error adding funds:', error);
+      alert('Failed to add funds. Please check the console for details.');
+    }
   };
 
-  // Function to handle withdrawing funds from a goal
+  // Function to handle withdrawing funds from a goal - fixed endpoint handling
   const handleWithdrawFunds = async () => {
     if (!currentGoal || !fundsToWithdraw) {
-      addToast({
-        title: "Error",
-        description: "Please enter an amount to withdraw",
-        variant: "destructive",
-      });
+      alert("Please enter an amount to withdraw");
       return;
     }
 
     const amount = parseFloat(fundsToWithdraw);
     if (isNaN(amount) || amount <= 0) {
-      addToast({
-        title: "Error",
-        description: "Please enter a valid amount",
-        variant: "destructive",
-      });
+      alert("Please enter a valid amount");
       return;
     }
 
     if (amount > currentGoal.amountSaved) {
-      addToast({
-        title: "Error",
-        description: "You cannot withdraw more than your current savings",
-        variant: "destructive",
-      });
+      alert("You cannot withdraw more than your current savings");
       return;
     }
 
-    const updatedAmount = currentGoal.amountSaved - amount;
-    
-    const updatedGoal = {
-      name: currentGoal.name,
-      target_amount: currentGoal.targetAmount,
-      current_amount: updatedAmount,
-      deadline: currentGoal.deadline,
-      description: `Goal for ${currentGoal.name}`
-    };
-    
-    updateGoalAmountMutation.mutate({
-      id: currentGoal.id,
-      data: updatedGoal
-    }, {
-      onSuccess: async () => {
-        // Save the transaction
-        await saveGoalTransaction(currentGoal.id, {
-          type: 'withdrawal',
-          amount: amount,
-          description: transactionDescription || `Withdrew funds from ${currentGoal.name}`,
-          balance: updatedAmount
-        });
-        
-        setWithdrawFundsOpen(false);
-      }
-    });
+    try {
+      console.log(`Withdrawing ${amount} funds from goal ${currentGoal.id}`);
+      
+      // Calculate new amount and update using the correct field names
+      const updatedAmount = currentGoal.amountSaved - amount;
+      
+      const updatedGoal = {
+        ...currentGoal,
+        current_amount: updatedAmount,
+        // Don't need to send progress as it's calculated by the backend
+        // Convert targetAmount to target_amount for the backend
+        target_amount: currentGoal.targetAmount,
+        // Keep other fields the same but with correct names
+        name: currentGoal.name,
+        deadline: currentGoal.deadline,
+        description: `Goal for ${currentGoal.name}`
+      };
+      
+      await goalService.update(currentGoal.id, updatedGoal);
+      
+      // Save the transaction
+      await saveGoalTransaction(currentGoal.id, {
+        type: 'withdrawal',
+        amount: amount,
+        description: transactionDescription || `Withdrew funds from ${currentGoal.name}`,
+        balance: updatedAmount
+      });
+      
+      await refreshData();
+      setWithdrawFundsOpen(false);
+    } catch (error) {
+      console.error('Error withdrawing funds:', error);
+      alert('Failed to withdraw funds. Please check the console for details.');
+    }
   };
 
   // Function to handle transferring funds between goals
   const handleTransferFunds = async () => {
     if (!currentGoal || !fundsToTransfer || !transferTargetGoalId) {
-      addToast({
-        title: "Error",
-        description: "Please complete all required fields",
-        variant: "destructive",
-      });
+      alert("Please complete all required fields");
       return;
     }
 
     const amount = parseFloat(fundsToTransfer);
     if (isNaN(amount) || amount <= 0) {
-      addToast({
-        title: "Error",
-        description: "Please enter a valid amount",
-        variant: "destructive",
-      });
+      alert("Please enter a valid amount");
       return;
     }
 
     if (amount > currentGoal.amountSaved) {
-      addToast({
-        title: "Error",
-        description: "You cannot transfer more than your current savings",
-        variant: "destructive",
-      });
+      alert("You cannot transfer more than your current savings");
       return;
     }
 
     const targetGoal = localGoals.find(g => g.id === transferTargetGoalId);
     if (!targetGoal) {
-      addToast({
-        title: "Error",
-        description: "Target goal not found",
-        variant: "destructive",
-      });
+      alert("Target goal not found");
       return;
     }
 
-    // Calculate updated values
-    const sourceUpdatedAmount = currentGoal.amountSaved - amount;
-    const targetUpdatedAmount = targetGoal.amountSaved + amount;
-    
-    // Update source goal with correct field names
-    const sourceGoalUpdate = {
-      name: currentGoal.name,
-      target_amount: currentGoal.targetAmount,
-      current_amount: sourceUpdatedAmount,
-      deadline: currentGoal.deadline,
-      description: `Transfer to ${targetGoal.name}`
-    };
-    
-    // First withdraw from source goal
-    updateGoalAmountMutation.mutate({
-      id: currentGoal.id,
-      data: sourceGoalUpdate
-    }, {
-      onSuccess: async () => {
-        // Update target goal with correct field names
-        const targetGoalUpdate = {
-          name: targetGoal.name,
-          target_amount: targetGoal.targetAmount,
-          current_amount: targetUpdatedAmount,
-          deadline: targetGoal.deadline,
-          description: `Transfer from ${currentGoal.name}`
-        };
-        
-        // Then add to target goal
-        updateGoalAmountMutation.mutate({
-          id: targetGoal.id,
-          data: targetGoalUpdate
-        }, {
-          onSuccess: async () => {
-            // Save withdrawal transaction
-            await saveGoalTransaction(currentGoal.id, {
-              type: 'withdrawal',
-              amount: amount,
-              description: transactionDescription || `Transfer to ${targetGoal.name}`,
-              balance: sourceUpdatedAmount
-            });
-            
-            // Save deposit transaction
-            await saveGoalTransaction(targetGoal.id, {
-              type: 'deposit',
-              amount: amount,
-              description: transactionDescription || `Transfer from ${currentGoal.name}`,
-              balance: targetUpdatedAmount
-            });
-            
-            setTransferFundsOpen(false);
-          }
-        });
-      }
-    });
+    try {
+      console.log(`Transferring ${amount} from goal ${currentGoal.id} to goal ${targetGoal.id}`);
+      
+      // Calculate updated values for source goal
+      const sourceUpdatedAmount = currentGoal.amountSaved - amount;
+      
+      // Calculate updated values for target goal
+      const targetUpdatedAmount = targetGoal.amountSaved + amount;
+      
+      // Update source goal with correct field names
+      const sourceGoalUpdate = {
+        name: currentGoal.name,
+        target_amount: currentGoal.targetAmount,
+        current_amount: sourceUpdatedAmount,
+        deadline: currentGoal.deadline,
+        description: `Transfer to ${targetGoal.name}`
+      };
+      
+      // Update target goal with correct field names
+      const targetGoalUpdate = {
+        name: targetGoal.name,
+        target_amount: targetGoal.targetAmount,
+        current_amount: targetUpdatedAmount,
+        deadline: targetGoal.deadline,
+        description: `Transfer from ${currentGoal.name}`
+      };
+      
+      // First withdraw from source goal
+      await goalService.update(currentGoal.id, sourceGoalUpdate);
+      
+      // Then add to target goal
+      await goalService.update(targetGoal.id, targetGoalUpdate);
+      
+      // Save withdrawal transaction
+      await saveGoalTransaction(currentGoal.id, {
+        type: 'withdrawal',
+        amount: amount,
+        description: transactionDescription || `Transfer to ${targetGoal.name}`,
+        balance: sourceUpdatedAmount
+      });
+      
+      // Save deposit transaction
+      await saveGoalTransaction(targetGoal.id, {
+        type: 'deposit',
+        amount: amount,
+        description: transactionDescription || `Transfer from ${currentGoal.name}`,
+        balance: targetUpdatedAmount
+      });
+      
+      await refreshData();
+      setTransferFundsOpen(false);
+    } catch (error) {
+      console.error('Error transferring funds:', error);
+      alert('Failed to transfer funds. Please check the console for details.');
+    }
   };
 
   // Format date values
@@ -1388,7 +1208,7 @@ const FinanceGoal = () => {
                   Cancel
                 </Button>
                 <Button
-                  className="bg-indigo-900 hover:bg-indigo-700 text-white"
+                  className="bg-red-600 hover:bg-red-700 text-white"
                   onClick={handleWithdrawFunds}
                 >
                   Withdraw Funds
@@ -1471,7 +1291,7 @@ const FinanceGoal = () => {
                   Cancel
                 </Button>
                 <Button
-                  className="bg-indigo-900 hover:bg-indigo-700 text-white"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
                   onClick={handleTransferFunds}
                 >
                   Transfer Funds
@@ -1547,14 +1367,14 @@ const FinanceGoal = () => {
               </div>
             </CardHeader>
             <CardContent className="p-4">
-              {isLoading ? (
+              {loading ? (
                 <div className="flex items-center justify-center h-full">
                   <LoadingSpinner />
                 </div>
               ) : error ? (
                 <div className="text-center text-red-500">
-                  <p>{error.message}</p>
-                  <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['goals'] })} className="mt-4">
+                  <p>{error}</p>
+                  <Button onClick={refreshData} className="mt-4">
                     Retry
                   </Button>
                 </div>

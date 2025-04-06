@@ -49,12 +49,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { useFinance } from "@/context/FinanceContext";
+import { incomeService } from "@/services/api";
 import { LoadingSpinner } from "@/components/common/LoadingSpinner";
 import { useAuth } from "@/context/AuthContext";
 import { formatCurrency } from "@/utils/format";
 import { useToast } from "@/components/ui/use-toast";
 import { Label } from "@/components/ui/label";
-import { useIncome } from "@/hooks";
 
 // Define types for the NavItem props
   interface NavItemProps {
@@ -93,14 +94,14 @@ const NavItem: React.FC<NavItemProps> = ({
     </div>
   );
 
-  interface IncomeItem {
+interface IncomeItem {
   id: string;
-    type: string;
-    amount: number;
+  type: string;
+  amount: number;
   date: string;
-    fill: string;
-    color: string;
-  }
+  fill: string;
+  color: string;
+}
 
 // Define a StatCard component for editable income sources
 interface StatCardProps {
@@ -113,18 +114,18 @@ interface StatCardProps {
 
 // Define a set of consistent colors for income sources
 const INCOME_COLORS = [
-  "#0000FF", // Dark blue (from image)
-  "#191970", // Navy blue (from image)
-  "#483D8B", // Medium blue (from image)
-  "#0000CD", // Lighter blue (from image)
-  "#4299E1", // Additional blues
-  "#3182CE",
-  "#667EEA",
-  "#38B2AC",
-  "#48BB78",
-  "#38A169",
-  "#9F7AEA",
-  "#D53F8C",
+  "#4299E1", // Blue
+  "#F56565", // Red
+  "#48BB78", // Green
+  "#9F7AEA", // Purple
+  "#ED8936", // Orange
+  "#38B2AC", // Teal
+  "#667EEA", // Indigo
+  "#D53F8C", // Pink
+  "#805AD5", // Purple
+  "#DD6B20", // Orange
+  "#3182CE", // Blue
+  "#38A169", // Green
 ];
 
 // Add color options array near the top of the file with the other constants
@@ -141,28 +142,12 @@ const COLOR_OPTIONS = [
 
 const Income = () => {
   const { addToast } = useToast();
+  const { income, loading, error, refreshData } = useFinance();
   const { user } = useAuth();
   const navigate = useNavigate();
-
-  // Use our custom income hook instead of direct TanStack Query
-  const {
-    income: incomeItems,
-    isLoading,
-    error,
-    totalIncome,
-    formatCurrency,
-    createIncome,
-    updateIncome,
-    deleteIncome,
-    mutations,
-    getChartData
-  } = useIncome();
-
-  // Transform incomeItems to match the IncomeItem interface
   const [incomeData, setIncomeData] = useState<IncomeItem[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [openPopover, setOpenPopover] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -170,7 +155,7 @@ const Income = () => {
   const [newIncome, setNewIncome] = useState({
     type: "",
     amount: "100",
-    color: "#0000FF" // Default blue color from image
+    color: "#3B82F6" // Default blue color
   });
   const [editIncome, setEditIncome] = useState<{
     type: string;
@@ -186,21 +171,70 @@ const Income = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(false);
 
-  // Process income data from the custom hook
-  useEffect(() => {
-    if (incomeItems && Array.isArray(incomeItems)) {
-      console.log("Income data from hook:", incomeItems);
-      
-      setIncomeData(incomeItems.map(item => ({
-        id: item.id,
-        type: item.source, // Map source to type
-        amount: item.amount, 
-        date: item.date || new Date().toISOString(),
-        fill: item.color,
-        color: item.color
-      })));
+  // Function to scroll to bottom of the list
+  const scrollToBottom = () => {
+    if (chartRef.current) {
+      setTimeout(() => {
+        if (chartRef.current) {
+          chartRef.current.scrollTop = chartRef.current.scrollHeight;
+        }
+      }, 100); // Small delay to ensure DOM updates
     }
-  }, [incomeItems]);
+  };
+
+  // Process income data from the backend with saved colors
+  useEffect(() => {
+    if (income && Array.isArray(income)) {
+      console.log("Income data from backend:", income);
+      if (income.length > 0) {
+        console.log("First income item:", income[0]);
+        console.log("ID properties:", {
+          _id: income[0]._id,
+          id: income[0].id,
+          typeOfId: typeof income[0]._id || typeof income[0].id
+        });
+        console.log("Income color information:", {
+          color: income[0].color,
+          typeOfColor: typeof income[0].color
+        });
+      }
+      
+      // Load saved colors from localStorage
+      let savedColors: Record<string, string> = {};
+      try {
+        savedColors = JSON.parse(localStorage.getItem('incomeColors') || '{}');
+        console.log("Loaded colors from localStorage:", savedColors);
+      } catch (e) {
+        console.error("Failed to parse saved colors:", e);
+      }
+      
+      setIncomeData(income.map((item, index) => {
+        // Ensure we have an ID - use _id (MongoDB) or id (regular), or fallback to index
+        const itemId = item._id || item.id || `temp-${index}`;
+        console.log(`Item #${index} ID:`, itemId, "Type:", typeof itemId);
+        
+        // Use deterministic color based on type to ensure consistency
+        const typeHash = item.type ? 
+          item.type.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) : 0;
+        const colorIndex = typeHash % INCOME_COLORS.length;
+        
+        // First try to get color from localStorage, fallback to default colors
+        const itemColor = savedColors[String(itemId)] || INCOME_COLORS[colorIndex];
+        console.log(`Color for item ${index}:`, itemColor);
+        
+        return {
+          id: itemId,
+          // Use name if available, fall back to type, or provide a default if both are missing
+          type: item.name || item.type || 'New Income Source', 
+          amount: Number(item.amount) || 0,
+          date: item.date || new Date().toISOString(),
+          // Use saved color or assign from our color palette
+          fill: itemColor,
+          color: itemColor,
+        };
+      }));
+    }
+  }, [income]);
 
   // Save colors to localStorage when they change
   useEffect(() => {
@@ -229,6 +263,9 @@ const Income = () => {
     }
   }, [user]);
 
+  // Calculate total income and ensure it's not NaN
+  const totalIncome = incomeData.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
   // Prepare chart data with better filtering using useMemo
   const chartData = useMemo(() => {
     const chartItems = incomeData
@@ -255,16 +292,17 @@ const Income = () => {
         <div className="bg-white p-2 border rounded shadow">
           <p className="font-medium">{payload[0].name}</p>
           <p className="text-gray-600">{formatCurrency(value)}</p>
-          <p className="text-gray-600">{percent}% of income</p>
+          <p className="text-gray-500">
+            {percent}% of total
+          </p>
         </div>
       );
     }
-    
     return null;
   };
 
+  // Handle window resize for mobile detection
   useEffect(() => {
-    // Check for mobile screen size
     const handleResize = () => {
       setIsMobile(window.innerWidth < 768);
     };
@@ -273,47 +311,140 @@ const Income = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // Handle adding new income
   const addIncomeSource = () => {
-    setNewIncome({
-      type: "",
-      amount: "100",
-      color: "#0000FF" // Default blue color from image
-    });
     setIsDialogOpen(true);
+    setNewIncome({ type: "", amount: "100", color: "#3B82F6" });
   };
 
+  // Handle quick add income source
   const quickAddIncomeSource = async () => {
-    // Validate input
-    if (!newIncome.type) {
-      addToast({
-        title: "Error",
-        description: "Please enter a name for the income source",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const amount = parseFloat(newIncome.amount);
-    if (isNaN(amount) || amount <= 0) {
-      addToast({
-        title: "Error",
-        description: "Please enter a valid amount",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
-      // Prepare the new income source with correct property names
+      // Define a list of income source types with appropriate colors
+      const incomeTypes = [
+        { type: "Salary", color: "#3B82F6", description: "Regular monthly salary", amount: 100 }, // Blue
+        { type: "Freelance", color: "#EF4444", description: "Project-based income", amount: 100 }, // Red
+        { type: "Investments", color: "#10B981", description: "Returns from investments", amount: 100 }, // Green
+        { type: "Rental", color: "#F59E0B", description: "Income from property", amount: 100 }, // Yellow
+        { type: "Side Hustle", color: "#8B5CF6", description: "Additional income streams", amount: 100 }, // Purple
+      ];
+      
+      // Get existing income types
+      const existingTypes = incomeData.map(item => item.type);
+      
+      // Find a type that doesn't exist yet, or default to "Other Income"
+      let newSource = incomeTypes.find(item => !existingTypes.includes(item.type));
+      
+      // If all pre-defined types are used, create one with a random name
+      if (!newSource) {
+        const randomIndex = Math.floor(Math.random() * incomeTypes.length);
+        const baseType = incomeTypes[randomIndex];
+        newSource = {
+          type: `Other Income ${existingTypes.length + 1}`,
+          color: baseType.color,
+          description: "Additional income category",
+          amount: 100
+        };
+      }
+      
+      // Add today's date to the new source
+      const today = new Date();
+      const formattedDate = today.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+      
+      // Use type assertion to add the date property
+      const sourceWithDate = {
+        ...newSource,
+        date: formattedDate,
+        name: newSource.type // Ensure name is set equal to type
+      };
+
+      console.log("Quick adding income source with color:", newSource.color);
+      // Remove the color from what we send to the backend
+      const { color, ...backendData } = sourceWithDate;
+      const response = await incomeService.create(backendData);
+      
+      // When creating a new source, we need to wait for the response to get the ID
+      if (response && response.data && response.data.id) {
+        // Save color to localStorage
+        try {
+          const colorMap: Record<string, string> = JSON.parse(localStorage.getItem('incomeColors') || '{}');
+          colorMap[String(response.data.id)] = newSource.color;
+          localStorage.setItem('incomeColors', JSON.stringify(colorMap));
+          console.log("Saved quick-added income source color to localStorage:", {
+            id: response.data.id,
+            color: newSource.color
+          });
+        } catch (e) {
+          console.error("Failed to save color to localStorage:", e);
+        }
+      }
+      
+      await refreshData();
+      scrollToBottom();
+      
+      addToast({
+        title: "Success",
+        description: `New income source added. Edit it to update details.`,
+      });
+    } catch (error) {
+      console.error("Error adding income source:", error);
+      addToast({
+        title: "Error",
+        description: "Failed to add income source",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle editing income
+  const handleEdit = (item: IncomeItem) => {
+    console.log("Editing income item:", item);
+    setSelectedIncome(item);
+    setEditIncome({
+      type: item.type,
+      amount: item.amount.toString(),
+      color: item.color || '#3B82F6'
+    });
+    setIsEditing(true);
+  };
+
+  // Handle deleting income
+  const handleDelete = (item: IncomeItem) => {
+    setSelectedIncome(item);
+    setDeleteDialogOpen(true);
+  };
+
+  // Handle saving new income and update chart
+  const handleSave = async () => {
+    try {
+      if (!newIncome.type || !newIncome.amount) {
+        addToast({
+          title: "Error",
+          description: "Please fill in all fields",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const amount = parseFloat(newIncome.amount);
+      if (isNaN(amount) || amount <= 0) {
+        addToast({
+          title: "Error",
+          description: "Please enter a valid amount",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const newSource = {
-        source: newIncome.type, // Use source instead of type
+        type: newIncome.type,
+        name: newIncome.type, // Ensure name is set equal to type
         amount: amount,
-        description: `Income from ${newIncome.type}`,
-        color: newIncome.color
+        description: `Income from ${newIncome.type}`
       };
       
       console.log("Creating new income source with color:", newIncome.color);
-      const response = await createIncome(newSource);
+      const response = await incomeService.create(newSource);
       
       // When creating a new source, we need to wait for the response to get the ID
       if (response && response.data && response.data.id) {
@@ -330,63 +461,25 @@ const Income = () => {
           console.error("Failed to save color to localStorage:", e);
         }
       }
+
+      addToast({
+        title: "Success",
+        description: "Income source added successfully",
+      });
+
+      setIsDialogOpen(false);
+      refreshData();
     } catch (error) {
-      // Error is handled by the mutation
+      console.error("Error adding income source:", error);
+      addToast({
+        title: "Error",
+        description: "Failed to add income source",
+        variant: "destructive",
+      });
     }
   };
 
-  const handleEdit = (item: IncomeItem) => {
-    setSelectedIncome(item);
-    setEditIncome({
-      type: item.type,
-      amount: item.amount.toString(),
-      color: item.color
-    });
-    setIsEditing(true);
-  };
-
-  const handleDelete = (item: IncomeItem) => {
-    setSelectedIncome(item);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleSave = async () => {
-    try {
-      // Validate input
-      if (!newIncome.type || !newIncome.amount) {
-        addToast({
-          title: "Error",
-          description: "Please fill in all required fields",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      const amount = parseFloat(newIncome.amount);
-      if (isNaN(amount) || amount <= 0) {
-        addToast({
-          title: "Error",
-          description: "Please enter a valid amount",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      // Prepare the new income source with correct property names
-      const newSource = {
-        source: newIncome.type, // Use source instead of type
-        amount,
-        description: `Income from ${newIncome.type}`,
-        color: newIncome.color
-      };
-      
-      console.log("Creating new income source with color:", newIncome.color);
-      await createIncome(newSource);
-    } catch (error) {
-      // Error is handled by the mutation
-    }
-  };
-
+  // Handle updating income
   const handleUpdate = async () => {
     try {
       if (!selectedIncome || !editIncome.type || !editIncome.amount) {
@@ -419,10 +512,10 @@ const Income = () => {
       }
 
       const updatedSource = {
-        source: editIncome.type,
+        type: editIncome.type,
+        name: editIncome.type, // Ensure the name is updated too
         amount: amount,
-        date: selectedIncome.date,
-        color: editIncome.color
+        description: `Income from ${editIncome.type}`
       };
 
       console.log("Updating income source in handleUpdate:", {
@@ -432,12 +525,26 @@ const Income = () => {
         newColor: editIncome.color
       });
 
-      await updateIncome(selectedIncome.id, updatedSource);
+      await incomeService.update(selectedIncome.id, updatedSource);
+
+      addToast({
+        title: "Success",
+        description: "Income source updated successfully",
+      });
+
+      setIsEditing(false);
+      refreshData();
     } catch (error) {
-      // Error is handled by the mutation
+      console.error("Error updating income source:", error);
+      addToast({
+        title: "Error",
+        description: "Failed to update income source",
+        variant: "destructive",
+      });
     }
   };
 
+  // Handle deleting income
   const handleDeleteConfirm = async () => {
     try {
       if (!selectedIncome) {
@@ -475,9 +582,22 @@ const Income = () => {
         console.error("Failed to update localStorage on delete:", e);
       }
 
-      await deleteIncome(selectedIncome.id);
+      await incomeService.delete(selectedIncome.id);
+
+      addToast({
+        title: "Success",
+        description: "Income source deleted successfully",
+      });
+
+      setDeleteDialogOpen(false);
+      refreshData();
     } catch (error) {
-      // Error is handled by the mutation
+      console.error("Failed to delete income source:", error);
+      addToast({
+        title: "Error",
+        description: "Failed to delete income source",
+        variant: "destructive",
+      });
     }
   };
 
@@ -488,9 +608,8 @@ const Income = () => {
     const [editTitle, setEditTitle] = useState(title);
     const [editDate, setEditDate] = useState(date);
     const [editColor, setEditColor] = useState(color);
-    
-    const [quickAddAmount, setQuickAddAmount] = useState('');
     const [isQuickEditing, setIsQuickEditing] = useState(false);
+    const [quickAddAmount, setQuickAddAmount] = useState('');
 
     console.log("StatCard rendering with ID:", id, "Type:", typeof id, "Title:", title, "Color:", color);
 
@@ -548,7 +667,7 @@ const Income = () => {
       <Card
         id={`income-card-${id}`}
         className="p-4 shadow-lg rounded-2xl mb-3 flex items-center w-full relative"
-        style={{ backgroundColor: isEditingCard ? editColor : color }}
+        style={{ backgroundColor: color }}
       >
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -715,7 +834,7 @@ const Income = () => {
                     </Button>
                   </div>
                 </div>
-              </CardContent>
+        </CardContent>
             </Card>
           </div>
         )}
@@ -723,10 +842,11 @@ const Income = () => {
     );
   };
 
-  // Function to update an income source (called from StatCard)
+  // Update income source and refresh chart data
   const updateIncomeSource = async (id: string, newType: string, newAmount: string, newDate: string, newColor: string) => {
     try {
-      console.log("updateIncomeSource called with:", { id, newType, newAmount, newDate, newColor });
+      console.log("Updating income source with ID:", id, "Type:", typeof id);
+      console.log("Color being updated to:", newColor);
       
       if (!id) {
         console.error("Cannot update income with invalid ID:", id);
@@ -738,17 +858,8 @@ const Income = () => {
         return;
       }
       
-      if (!newType || !newAmount) {
-        addToast({
-          title: "Error",
-          description: "Please fill in all fields",
-          variant: "destructive",
-        });
-        return;
-      }
-      
       const amount = parseFloat(newAmount);
-      if (isNaN(amount) || amount <= 0) {
+      if (isNaN(amount) || amount < 0) {
         addToast({
           title: "Error",
           description: "Please enter a valid amount",
@@ -756,27 +867,36 @@ const Income = () => {
         });
         return;
       }
-      
-      // Save the new color to localStorage
+
+      // Save color to localStorage
       try {
         const colorMap: Record<string, string> = JSON.parse(localStorage.getItem('incomeColors') || '{}');
         colorMap[String(id)] = newColor;
         localStorage.setItem('incomeColors', JSON.stringify(colorMap));
-        console.log("Saved card color to localStorage:", {id, color: newColor});
+        console.log("Saved color to localStorage:", {id, color: newColor});
       } catch (e) {
         console.error("Failed to save color to localStorage:", e);
       }
-      
-      // Prepare data to update with correct property names
+
+      // Both name and type should be updated to the new value
       const updatedSource = {
-        source: newType, // Use source instead of type
+        type: newType,
         amount: amount,
-        date: newDate,
-        color: newColor // Include color in update
+        name: newType, // Setting name equal to type for consistency
+        description: `Income from ${newType}`,
+        date: newDate
+        // Note: We don't send color to backend since it doesn't support it
       };
+
+      console.log("Sending update with data:", updatedSource);
+      await incomeService.update(id, updatedSource);
       
-      await updateIncome(id, updatedSource);
+      addToast({
+        title: "Success",
+        description: "Income source updated successfully",
+      });
       
+      refreshData();
     } catch (error) {
       console.error("Error updating income source:", error);
       addToast({
@@ -787,24 +907,17 @@ const Income = () => {
     }
   };
 
-  // Helper function to format dates better
+  // Add a formatDate function near the formatCurrency function
   const formatDate = (dateString?: string) => {
     if (!dateString) return "N/A";
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch (e) {
-      console.error("Error formatting date:", e);
-      return "Invalid Date";
-    }
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "Invalid date";
+    return new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }).format(date);
   };
-
-  // Use memo to ensure stable ID value
-  const memoizedCardId = (id: string) => useMemo(() => id, [id]);
 
   return (
     <div className="flex h-screen bg-indigo-100 overflow-hidden">
@@ -1034,7 +1147,7 @@ const Income = () => {
 
                   <DropdownMenuItem
                     onSelect={(e) => e.preventDefault()}
-                    onClick={() => setIsLogoutDialogOpen(true)}
+                    onClick={() => setIsDialogOpen(true)}
                   >
                     Log Out
                   </DropdownMenuItem>
@@ -1047,7 +1160,7 @@ const Income = () => {
         {/* Main Content Area */}
         <main className="flex-1 p-6 overflow-y-auto">
           {/* Logout Confirmation Dialog */}
-          <AlertDialog open={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>
+          <AlertDialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
@@ -1058,7 +1171,7 @@ const Income = () => {
               <AlertDialogFooter>
                 <AlertDialogCancel
                   className="bg-indigo-100 hover:bg-indigo-300"
-                  onClick={() => setIsLogoutDialogOpen(false)}
+                  onClick={() => setIsDialogOpen(false)}
                 >
                   Cancel
                 </AlertDialogCancel>
@@ -1082,7 +1195,7 @@ const Income = () => {
                   <CardDescription className="flex justify-between items-center">
                     <span>Breakdown of your income sources (Total: {formatCurrency(totalIncome)})</span>
                     <Button
-                      onClick={() => setIsDialogOpen(true)}
+                      onClick={quickAddIncomeSource}
                       className="bg-indigo-500 hover:bg-indigo-600 text-white"
                     >
                       <Plus size={16} className="mr-1" />
@@ -1090,19 +1203,19 @@ const Income = () => {
                     </Button>
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex-1 pb-0 flex justify-center h-[320px]">
-                  {isLoading ? (
-                    <div className="flex items-center justify-center w-full h-full">
-                      <LoadingSpinner size="lg" />
+                <CardContent className="flex-1 pb-0 flex justify-center">
+                  {loading ? (
+                    <div className="flex items-center justify-center h-full">
+                      <LoadingSpinner />
                     </div>
                   ) : error ? (
                     <div className="text-center text-red-500">
-                      <p>{error.message}</p>
-                      <Button onClick={() => window.location.reload()} className="mt-4">
+                      <p>{error}</p>
+                      <Button onClick={refreshData} className="mt-4">
                         Retry
                       </Button>
                     </div>
-                  ) : incomeData.length > 0 ? (
+                  ) : chartData.length > 0 ? (
                     <div className="mx-auto w-full max-w-[500px] h-[320px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
@@ -1145,7 +1258,7 @@ const Income = () => {
                       </p>
                       <Button
                         className="bg-indigo-500 hover:bg-indigo-600 text-white"
-                        onClick={() => setIsDialogOpen(true)}
+                        onClick={quickAddIncomeSource}
                       >
                         Add Income Source
                       </Button>
@@ -1159,13 +1272,9 @@ const Income = () => {
             <div className="md:col-span-1 flex flex-col justify-between">
               <div
                 className="h-[428px] overflow-y-auto space-y-3 p-3 border border-grey shadow-lg bg-white rounded-xl"
-                ref={chartRef}
+                ref={chartRef} // Added ref for scrolling functionality
               >
-                {isLoading ? (
-                  <div className="flex items-center justify-center w-full h-full min-h-[320px]">
-                    <LoadingSpinner size="lg" />
-                  </div>
-                ) : incomeData.length > 0 ? (
+                {incomeData.length > 0 ? (
                   incomeData.map((income) => (
                   <StatCard
                     key={income.id}
@@ -1181,11 +1290,11 @@ const Income = () => {
                     <p className="mb-4">No income sources found</p>
                     <Button
                       className="bg-indigo-500 hover:bg-indigo-600 text-white"
-                      onClick={() => setIsDialogOpen(true)}
+                      onClick={quickAddIncomeSource}
                     >
                       Add Income Source
                     </Button>
-                  </div>
+            </div>
                 )}
           </div>
             </div>
@@ -1207,15 +1316,7 @@ const Income = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoading ? (
-                    <tr>
-                      <td colSpan={3} className="px-4 py-12 text-center">
-                        <div className="flex justify-center items-center h-[100px] w-full">
-                          <LoadingSpinner size="md" />
-                        </div>
-                      </td>
-                    </tr>
-                  ) : incomeData.length > 0 ? (
+                  {incomeData.length > 0 ? (
                     incomeData.map((income) => (
                       <tr key={income.id} className="border-b hover:bg-gray-50">
                         <td className="px-4 py-3">{formatDate(income.date)}</td>
@@ -1302,88 +1403,46 @@ const Income = () => {
             {/* Color Picker - Show for both edit and add */}
             <div className="grid gap-2">
               <Label htmlFor="color">Color</Label>
-              <div className="p-2 rounded-md" style={{ backgroundColor: isEditing ? editIncome.color : newIncome.color }}>
-                <div className="bg-white p-3 rounded-lg shadow-inner border">
-                  <div className="grid grid-cols-9 gap-2">
-                    {COLOR_OPTIONS.slice(0, 9).map((colorOption, index) => (
-                      <button
-                        key={index}
-                        className={`w-6 h-6 rounded-full ${
-                          (isEditing ? editIncome.color : newIncome.color) === colorOption 
-                            ? 'ring-2 ring-offset-1 ring-black' 
-                            : ''
-                        }`}
-                        style={{ backgroundColor: colorOption }}
-                        onClick={() => 
-                          isEditing 
-                            ? setEditIncome({ ...editIncome, color: colorOption })
-                            : setNewIncome({ ...newIncome, color: colorOption })
-                        }
-                        type="button"
-                        aria-label={`Color option ${index + 1}`}
-                      />
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-9 gap-2 mt-2">
-                    {COLOR_OPTIONS.slice(9, 18).map((colorOption, index) => (
-                      <button
-                        key={index + 9}
-                        className={`w-6 h-6 rounded-full ${
-                          (isEditing ? editIncome.color : newIncome.color) === colorOption 
-                            ? 'ring-2 ring-offset-1 ring-black' 
-                            : ''
-                        }`}
-                        style={{ backgroundColor: colorOption }}
-                        onClick={() => 
-                          isEditing 
-                            ? setEditIncome({ ...editIncome, color: colorOption })
-                            : setNewIncome({ ...newIncome, color: colorOption })
-                        }
-                        type="button"
-                        aria-label={`Color option ${index + 10}`}
-                      />
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-9 gap-2 mt-2">
-                    {COLOR_OPTIONS.slice(18, 27).map((colorOption, index) => (
-                      <button
-                        key={index + 18}
-                        className={`w-6 h-6 rounded-full ${
-                          (isEditing ? editIncome.color : newIncome.color) === colorOption 
-                            ? 'ring-2 ring-offset-1 ring-black' 
-                            : ''
-                        }`}
-                        style={{ backgroundColor: colorOption }}
-                        onClick={() => 
-                          isEditing 
-                            ? setEditIncome({ ...editIncome, color: colorOption })
-                            : setNewIncome({ ...newIncome, color: colorOption })
-                        }
-                        type="button"
-                        aria-label={`Color option ${index + 19}`}
-                      />
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-9 gap-2 mt-2">
-                    {COLOR_OPTIONS.slice(27, 36).map((colorOption, index) => (
-                      <button
-                        key={index + 27}
-                        className={`w-6 h-6 rounded-full ${
-                          (isEditing ? editIncome.color : newIncome.color) === colorOption 
-                            ? 'ring-2 ring-offset-1 ring-black' 
-                            : ''
-                        }`}
-                        style={{ backgroundColor: colorOption }}
-                        onClick={() => 
-                          isEditing 
-                            ? setEditIncome({ ...editIncome, color: colorOption })
-                            : setNewIncome({ ...newIncome, color: colorOption })
-                        }
-                        type="button"
-                        aria-label={`Color option ${index + 28}`}
-                      />
-                    ))}
-                  </div>
+              <div className="bg-white p-3 rounded-lg shadow-inner border">
+                <div className="grid grid-cols-9 gap-2">
+                  {COLOR_OPTIONS.slice(0, 9).map((colorOption, index) => (
+                    <button
+                      key={index}
+                      className={`w-6 h-6 rounded-full ${
+                        (isEditing ? editIncome.color : newIncome.color) === colorOption 
+                          ? 'ring-2 ring-offset-1 ring-black' 
+                          : ''
+                      }`}
+                      style={{ backgroundColor: colorOption }}
+                      onClick={() => 
+                        isEditing 
+                          ? setEditIncome({ ...editIncome, color: colorOption })
+                          : setNewIncome({ ...newIncome, color: colorOption })
+                      }
+                      type="button"
+                      aria-label={`Color option ${index + 1}`}
+                    />
+                  ))}
+                </div>
+                <div className="grid grid-cols-9 gap-2 mt-2">
+                  {COLOR_OPTIONS.slice(9, 18).map((colorOption, index) => (
+                    <button
+                      key={index + 9}
+                      className={`w-6 h-6 rounded-full ${
+                        (isEditing ? editIncome.color : newIncome.color) === colorOption 
+                          ? 'ring-2 ring-offset-1 ring-black' 
+                          : ''
+                      }`}
+                      style={{ backgroundColor: colorOption }}
+                      onClick={() => 
+                        isEditing 
+                          ? setEditIncome({ ...editIncome, color: colorOption })
+                          : setNewIncome({ ...newIncome, color: colorOption })
+                      }
+                      type="button"
+                      aria-label={`Color option ${index + 10}`}
+                    />
+                  ))}
                 </div>
               </div>
             </div>

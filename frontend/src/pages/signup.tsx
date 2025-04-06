@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
-import { useMutation } from "@tanstack/react-query";
 
 const SignUpPage = () => {
   const navigate = useNavigate();
@@ -22,56 +21,44 @@ const SignUpPage = () => {
     password: "",
     password2: ""
   });
-  // Simplified error state to only track password match since other errors use toast notifications
-  const [passwordsMatch, setPasswordsMatch] = useState(true);
-  const [showPassword, setShowPassword] = useState(false);
-
-  // Registration mutation
-  const registerMutation = useMutation({
-    mutationFn: async (userData: typeof formData) => {
-      if (!validateForm()) {
-        throw new Error("Form validation failed");
-      }
-      
-      return register(
-        userData.full_name, 
-        userData.email, 
-        userData.username, 
-        userData.password,
-        userData.password2
-      );
-    },
-    onSuccess: () => {
-      navigate("/login", { 
-        state: { 
-          signupSuccess: true,
-          email: formData.email,
-          defaultData: true
-        } 
-      });
-    },
-    onError: (error: Error) => {
-      // Display API error as toast
-      addToast({
-        title: "Registration Failed",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
+  const [errors, setErrors] = useState({
+    full_name: false,
+    email: false,
+    username: false,
+    passwordMatch: false,
+    apiError: ""
   });
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordError, setShowPasswordError] = useState(false);
 
   // Real-time password validation
   useEffect(() => {
     if (formData.password && formData.password2) {
-      setPasswordsMatch(formData.password === formData.password2);
+      const passwordsMatch = formData.password === formData.password2;
+      setErrors(prev => ({
+        ...prev,
+        passwordMatch: !passwordsMatch
+      }));
+      setShowPasswordError(!passwordsMatch);
     } else {
-      setPasswordsMatch(true); // Don't show error if fields are empty
+      setShowPasswordError(false);
     }
   }, [formData.password, formData.password2]);
 
   const validateForm = () => {
-    // Validate full name
-    if (formData.full_name.trim() === "") {
+    const newErrors = {
+      full_name: formData.full_name.trim() === "",
+      email: !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email),
+      username: formData.username.trim() === "",
+      passwordMatch: formData.password !== formData.password2,
+      apiError: ""
+    };
+    
+    setErrors(newErrors);
+    
+    // Show validation errors as toast messages
+    if (newErrors.full_name) {
       addToast({
         title: "Validation Error",
         description: "Full name is required",
@@ -80,8 +67,7 @@ const SignUpPage = () => {
       return false;
     }
     
-    // Validate email
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+    if (newErrors.email) {
       addToast({
         title: "Validation Error",
         description: "Please enter a valid email address",
@@ -90,8 +76,7 @@ const SignUpPage = () => {
       return false;
     }
     
-    // Validate username
-    if (formData.username.trim() === "") {
+    if (newErrors.username) {
       addToast({
         title: "Validation Error",
         description: "Username is required",
@@ -100,8 +85,7 @@ const SignUpPage = () => {
       return false;
     }
     
-    // Validate password match
-    if (formData.password !== formData.password2) {
+    if (newErrors.passwordMatch) {
       addToast({
         title: "Validation Error",
         description: "Passwords do not match",
@@ -110,7 +94,7 @@ const SignUpPage = () => {
       return false;
     }
     
-    return true;
+    return !Object.values(newErrors).some(Boolean);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -119,11 +103,58 @@ const SignUpPage = () => {
       ...prev,
       [name]: value
     }));
+
+    if (name !== "password" && name !== "password2") {
+      setErrors(prev => ({
+        ...prev,
+        [name]: name === "email" 
+          ? !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) 
+          : value.trim() === ""
+      }));
+    }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    registerMutation.mutate(formData);
+    if (!validateForm()) return;
+
+    setLoading(true);
+    setErrors(prev => ({ ...prev, apiError: "" }));
+
+    try {
+      // Clear any existing toast flag before we register
+      localStorage.removeItem('signupToastShown');
+      
+      await register(
+        formData.full_name, 
+        formData.email, 
+        formData.username, 
+        formData.password,
+        formData.password2
+      );
+      navigate("/login", { 
+        state: { 
+          signupSuccess: true,
+          email: formData.email,
+          defaultData: true  // Flag to indicate default data was created
+        } 
+      });
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : "Registration failed";
+      setErrors(prev => ({
+        ...prev,
+        apiError: errorMessage
+      }));
+      
+      // Display API error as toast
+      addToast({
+        title: "Registration Failed",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -136,7 +167,7 @@ const SignUpPage = () => {
       {/* Left Section (Signup Form) */}
       <Card className="w-full md:w-1/3 bg-[#dce4f2] flex flex-col relative h-full md:shadow-lg">
         <div className="absolute inset-0 md:hidden">
-          <img src={image} className="w-full h-full object-cover opacity-20" alt="Background Mobile" />
+          <img src={image} className="w-full h-full object-cover opacity-20" />
         </div>
 
         <CardContent className="flex flex-col items-center justify-center flex-grow px-6 sm:px-10 relative z-10">
@@ -239,7 +270,7 @@ const SignUpPage = () => {
                     />
                   )}
                 </div>
-                {!passwordsMatch && formData.password && formData.password2 && (
+                {showPasswordError && (
                   <p className="text-red-500 text-sm flex items-center">
                     <AlertCircle className="w-4 h-4 mr-1" />
                     Passwords do not match
@@ -250,10 +281,10 @@ const SignUpPage = () => {
               {/* Signup Button */}
               <Button
                 className="w-full h-[51px] bg-[#a9b5df] hover:bg-[#98a6d7] text-[#2d346b] text-lg shadow-lg rounded-lg"
-                disabled={registerMutation.isPending}
+                disabled={loading}
                 type="submit"
               >
-                {registerMutation.isPending ? (
+                {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Creating...
