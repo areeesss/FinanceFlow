@@ -28,7 +28,14 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
       
       try {
-        const { access } = await refreshToken();
+        // Get the refresh token from localStorage
+        const refreshTokenValue = localStorage.getItem('refresh_token');
+        if (!refreshTokenValue) {
+          throw new Error('No refresh token available');
+        }
+        
+        // Call refreshToken with the correct data format
+        const { access } = await refreshToken({ refresh: refreshTokenValue });
         localStorage.setItem('access_token', access);
         originalRequest.headers.Authorization = `Bearer ${access}`;
         return apiClient(originalRequest);
