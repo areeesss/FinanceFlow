@@ -12,63 +12,33 @@ import Income from "./pages/income";
 import Expenses from "./pages/expenses";
 import FinanceGoal from "./pages/financegoal";
 import Budgets from "./pages/budgets";
-import ProtectedRoute from "./components/common/ProtectedRoute"; // Import ProtectedRoute
+import ProtectedRoute from "./components/common/ProtectedRoute";
+import { FinanceProvider } from "./context/FinanceContext";
 
 function App() {
   return (
-    <Routes>
-      {/* Public Routes */}
-      <Route path="/" element={<Homepage />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/signup" element={<Signup />} />
-      <Route path="/gmail" element={<GmailLogin />} />
-      <Route path="/forgot-password" element={<ForgotPassword />} />
-      <Route path="/verify-code" element={<VerifyCode />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/aboutus" element={<AboutUs />} />
+    <FinanceProvider>
+      <Routes>
+        {/* Public Routes */}
+        <Route path="/" element={<Homepage />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/gmail" element={<GmailLogin />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/verify-code" element={<VerifyCode />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/aboutus" element={<AboutUs />} />
 
-      {/* Protected Routes */}
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/income"
-        element={
-          <ProtectedRoute>
-            <Income />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/expenses"
-        element={
-          <ProtectedRoute>
-            <Expenses />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/financegoal"
-        element={
-          <ProtectedRoute>
-            <FinanceGoal />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/budgets"
-        element={
-          <ProtectedRoute>
-            <Budgets />
-          </ProtectedRoute>
-        }
-      />
-    </Routes>
+        {/* Protected Routes */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/income" element={<Income />} />
+          <Route path="/expenses" element={<Expenses />} />
+          <Route path="/financegoal" element={<FinanceGoal />} />
+          <Route path="/budgets" element={<Budgets />} />
+        </Route>
+      </Routes>
+    </FinanceProvider>
   );
 }
 

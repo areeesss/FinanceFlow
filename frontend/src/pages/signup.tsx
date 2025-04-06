@@ -8,10 +8,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/components/ui/use-toast";
 
 const SignUpPage = () => {
   const navigate = useNavigate();
   const { register } = useAuth();
+  const { addToast } = useToast();
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
@@ -52,7 +54,46 @@ const SignUpPage = () => {
       passwordMatch: formData.password !== formData.password2,
       apiError: ""
     };
+    
     setErrors(newErrors);
+    
+    // Show validation errors as toast messages
+    if (newErrors.full_name) {
+      addToast({
+        title: "Validation Error",
+        description: "Full name is required",
+        variant: "destructive"
+      });
+      return false;
+    }
+    
+    if (newErrors.email) {
+      addToast({
+        title: "Validation Error",
+        description: "Please enter a valid email address",
+        variant: "destructive"
+      });
+      return false;
+    }
+    
+    if (newErrors.username) {
+      addToast({
+        title: "Validation Error",
+        description: "Username is required",
+        variant: "destructive"
+      });
+      return false;
+    }
+    
+    if (newErrors.passwordMatch) {
+      addToast({
+        title: "Validation Error",
+        description: "Passwords do not match",
+        variant: "destructive"
+      });
+      return false;
+    }
+    
     return !Object.values(newErrors).some(Boolean);
   };
 
@@ -81,6 +122,9 @@ const SignUpPage = () => {
     setErrors(prev => ({ ...prev, apiError: "" }));
 
     try {
+      // Clear any existing toast flag before we register
+      localStorage.removeItem('signupToastShown');
+      
       await register(
         formData.full_name, 
         formData.email, 
@@ -88,12 +132,26 @@ const SignUpPage = () => {
         formData.password,
         formData.password2
       );
-      navigate("/login", { state: { signupSuccess: true, email: formData.email } });
-    } catch (error) {
+      navigate("/login", { 
+        state: { 
+          signupSuccess: true,
+          email: formData.email,
+          defaultData: true  // Flag to indicate default data was created
+        } 
+      });
+    } catch (error: any) {
+      const errorMessage = error instanceof Error ? error.message : "Registration failed";
       setErrors(prev => ({
         ...prev,
-        apiError: error instanceof Error ? error.message : "Registration failed"
+        apiError: errorMessage
       }));
+      
+      // Display API error as toast
+      addToast({
+        title: "Registration Failed",
+        description: errorMessage,
+        variant: "destructive"
+      });
     } finally {
       setLoading(false);
     }
@@ -125,12 +183,6 @@ const SignUpPage = () => {
               </h1>
             </div>
 
-            {errors.apiError && (
-              <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-center">
-                {errors.apiError}
-              </div>
-            )}
-
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Full Name Input */}
               <div className="space-y-2">
@@ -142,7 +194,6 @@ const SignUpPage = () => {
                   value={formData.full_name}
                   onChange={handleChange}
                 />
-                {errors.full_name && <p className="text-red-500 text-sm">Name is required</p>}
               </div>
 
               {/* Email Input */}
@@ -155,7 +206,6 @@ const SignUpPage = () => {
                   value={formData.email}
                   onChange={handleChange}
                 />
-                {errors.email && <p className="text-red-500 text-sm">Invalid email format</p>}
               </div>
 
               {/* Username Input */}
@@ -168,7 +218,6 @@ const SignUpPage = () => {
                   value={formData.username}
                   onChange={handleChange}
                 />
-                {errors.username && <p className="text-red-500 text-sm">Username is required</p>}
               </div>
 
               {/* Password Input */}
@@ -248,6 +297,7 @@ const SignUpPage = () => {
             <p className="text-center text-lg mt-3">
               <span className="text-[#2d346b]">Already have an account? </span>
               <Button
+                type="button"  
                 variant="link"
                 className="text-[#2d346b] p-0"
                 onClick={() => navigate("/login")}

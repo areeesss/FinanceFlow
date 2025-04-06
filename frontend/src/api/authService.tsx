@@ -1,6 +1,6 @@
 import apiClient from './apiClient';
 
-interface User {
+export interface User {
   id: number;
   email: string;
   username: string;
@@ -17,7 +17,7 @@ interface SignupData {
   email: string;
   username: string;
   password: string;
-  password2: string; // Added this
+  password2: string;
 }
 
 interface TokenResponse {
@@ -26,12 +26,29 @@ interface TokenResponse {
   user: User;
 }
 
+interface RefreshTokenData {
+  refresh: string;
+}
+
+interface ApiError {
+  response?: {
+    data?: {
+      detail?: string;
+      email?: string[];
+      username?: string[];
+      password?: string[];
+      non_field_errors?: string[];
+    };
+  };
+}
+
 export const login = async (data: LoginData): Promise<TokenResponse> => {
   try {
     const response = await apiClient.post('/login/', data);
     return response.data;
-  } catch (error) {
-    throw new Error(error.response?.data?.detail || 'Login failed');
+  } catch (error: unknown) {
+    const apiError = error as ApiError;
+    throw new Error(apiError.response?.data?.detail || 'Login failed');
   }
 };
 
@@ -42,11 +59,12 @@ export const register = async (data: SignupData): Promise<TokenResponse> => {
       email: data.email,
       username: data.username,
       password: data.password,
-      password2: data.password2 // Added this
+      password2: data.password2
     });
     return response.data;
-  } catch (error) {
-    const errorData = error.response?.data;
+  } catch (error: unknown) {
+    const apiError = error as ApiError;
+    const errorData = apiError.response?.data;
     let errorMessage = 'Registration failed';
     
     if (errorData) {
@@ -80,11 +98,9 @@ export const getCurrentUser = async (): Promise<User> => {
   }
 };
 
-export const refreshToken = async (): Promise<{ access: string }> => {
+export const refreshToken = async (data: RefreshTokenData): Promise<{ access: string }> => {
   try {
-    const response = await apiClient.post('/token/refresh/', {
-      refresh: localStorage.getItem('refresh_token')
-    });
+    const response = await apiClient.post('/token/refresh/', data);
     return response.data;
   } catch (error) {
     throw new Error('Token refresh failed');

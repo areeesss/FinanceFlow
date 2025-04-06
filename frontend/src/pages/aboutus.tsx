@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { LucideIcon } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 // Define TypeScript interface for NavItem props
 interface NavItemProps {
@@ -108,9 +109,13 @@ const AboutUs = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  const [fullName, setFullName] = useState("Test User");
-  const [email, setEmail] = useState("test@example.com");
-  const [username, setUsername] = useState("TestUser");
+  // Get user data from auth context
+  const { user } = useAuth();
+  
+  // Initialize state with values from user context if available
+  const [fullName, setFullName] = useState(user?.full_name || "");
+  const [email, setEmail] = useState(user?.email || "");
+  const [username, setUsername] = useState(user?.username || "");
   const [isEditing, setIsEditing] = useState(false);
   const [openPopover, setOpenPopover] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(false);

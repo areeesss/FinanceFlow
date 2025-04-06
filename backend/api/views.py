@@ -14,6 +14,7 @@ from .serializers import (
     CategorySerializer, IncomeSerializer, ExpenseSerializer,
     SavingsSerializer, BudgetSerializer, GoalSerializer
 )
+import logging
 
 # Root View
 def root_view(request):
@@ -39,14 +40,19 @@ def root_view(request):
 User = get_user_model()
 
 # Authentication Views
-@permission_classes([AllowAny])
 class RegisterView(generics.CreateAPIView):
+    permission_classes = [AllowAny]
     serializer_class = RegisterSerializer
     
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+
+        # Log that user was created successfully
+        logger = logging.getLogger(__name__)
+        logger.info(f"User registered successfully: {user.username} ({user.email})")
+        logger.info(f"Default data creation should be triggered by signals.py")
 
         refresh = RefreshToken.for_user(user)
         
@@ -60,8 +66,8 @@ class RegisterView(generics.CreateAPIView):
         response.set_cookie('refresh_token', str(refresh), httponly=True)
         return response
 
-@permission_classes([AllowAny])
 class LoginView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
     serializer_class = LoginSerializer
 
     def post(self, request, *args, **kwargs):
@@ -80,8 +86,9 @@ class LoginView(generics.GenericAPIView):
         response.set_cookie('refresh_token', str(refresh), httponly=True)
         return response
 
-@permission_classes([AllowAny])
 class LogoutView(generics.GenericAPIView):
+    permission_classes = [AllowAny]
+    
     def post(self, request):
         try:
             refresh_token = request.data.get("refresh") or request.COOKIES.get('refresh_token')

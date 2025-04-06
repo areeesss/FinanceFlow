@@ -9,7 +9,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardHeader, CardContent, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { Avatar } from "@/components/ui/avatar";
 import {
   Home,
@@ -23,6 +22,7 @@ import {
   PiggyBank,
   Plus,
   Trash2,
+  Minus,
 } from "lucide-react";
 import darkfont from "@/assets/imgs/darkfont.webp";
 import { Switch } from "@/components/ui/switch";
@@ -60,15 +60,32 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useFinance } from "@/context/FinanceContext";
+import { goalService } from "@/services/api";
+import { LoadingSpinner } from "@/components/common/LoadingSpinner";
+import { formatCurrency } from "@/utils/format";
+import { useAuth } from "@/context/AuthContext";
 
 // Define TypeScript interfaces
 interface Goal {
-  id: number;
+  id: string;
   name: string;
   targetAmount: number;
   amountSaved: number;
   progress: number;
   deadline: string;
+  description?: string;
+}
+
+interface Transaction {
+  id: string;
+  type: 'deposit' | 'withdrawal';
+  amount: number;
+  description: string;
+  date: string;
+  balance: number;
+  goalName?: string;
+  goalId?: string;
 }
 
 const FinanceGoal = () => {
@@ -132,24 +149,45 @@ const FinanceGoal = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  const [fullName, setFullName] = useState("Test User");
-  const [email, setEmail] = useState("test@example.com");
-  const [username, setUsername] = useState("TestUser");
+  // Get user data from auth context
+  const { user } = useAuth();
+  
+  // Initialize state with values from user context if available
+  const [fullName, setFullName] = useState(user?.full_name || "");
+  const [email, setEmail] = useState(user?.email || "");
+  const [username, setUsername] = useState(user?.username || "");
   const [isEditing, setIsEditing] = useState(false);
   const [openPopover, setOpenPopover] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
-  const [goals, setGoals] = useState<Goal[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { goals, loading, error, refreshData } = useFinance();
+  const [localGoals, setLocalGoals] = useState<Goal[]>([]);
+
+  useEffect(() => {
+    if (goals && Array.isArray(goals)) {
+      console.log("Raw goals data from backend:", goals);
+      setLocalGoals(goals.map(item => ({
+        id: item._id ? item._id.toString() : String(item.id),
+        name: item.name || 'Unnamed Goal',
+        targetAmount: Number(item.target_amount) || 0,
+        amountSaved: Number(item.current_amount) || 0,
+        progress: Number(item.progress) || 0,
+        deadline: item.deadline || new Date().toISOString().split('T')[0],
+        description: item.description || ''
+      })));
+    }
+  }, [goals]);
 
   // New state for dialogs
   const [addGoalOpen, setAddGoalOpen] = useState(false);
   const [editGoalOpen, setEditGoalOpen] = useState(false);
   const [addFundsOpen, setAddFundsOpen] = useState(false);
   const [deleteGoalOpen, setDeleteGoalOpen] = useState(false);
-  // Add this missing state variable for withdraw funds dialog
+  const [withdrawFundsOpen, setWithdrawFundsOpen] = useState(false);
+  const [transferFundsOpen, setTransferFundsOpen] = useState(false);
+  const [fundsToTransfer, setFundsToTransfer] = useState("");
+  const [transferTargetGoalId, setTransferTargetGoalId] = useState<string>("");
 
   const [currentGoal, setCurrentGoal] = useState<Goal | null>(null);
 
@@ -159,8 +197,47 @@ const FinanceGoal = () => {
   const [newGoalDeadline, setNewGoalDeadline] = useState("");
   const [newSavedAmount, setNewSavedAmount] = useState("");
   const [fundsToAdd, setFundsToAdd] = useState("");
-  // Add this missing state variable for withdraw funds
-  const [fundsToWithdraw] = useState("");
+  const [fundsToWithdraw, setFundsToWithdraw] = useState("");
+  const [transactionDescription, setTransactionDescription] = useState("");
+  const [goalTransactions, setGoalTransactions] = useState<Transaction[]>([]);
+
+  // State for all transactions
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
+
+  // Function to fetch transactions for a specific goal
+  const fetchGoalTransactions = async (goalId: string): Promise<Transaction[]> => {
+    try {
+      // In a real implementation, you'd call an API endpoint
+      // For now, we'll use localStorage to simulate
+      const savedTransactions = localStorage.getItem(`goal_transactions_${goalId}`);
+      if (savedTransactions) {
+        return JSON.parse(savedTransactions);
+      }
+      return [];
+    } catch (error) {
+      console.error('Error fetching goal transactions:', error);
+      return [];
+    }
+  };
+
+  // Function to save a transaction for a goal
+  const saveGoalTransaction = async (goalId: string, transaction: Omit<Transaction, 'id' | 'date'>): Promise<Transaction[]> => {
+    try {
+      // In a real implementation, you'd call an API endpoint
+      // For now, we'll use localStorage to simulate
+      const existingTransactions = await fetchGoalTransactions(goalId);
+      const updatedTransactions = [...existingTransactions, {
+        ...transaction,
+        id: Date.now().toString(),
+        date: new Date().toISOString()
+      }];
+      localStorage.setItem(`goal_transactions_${goalId}`, JSON.stringify(updatedTransactions));
+      return updatedTransactions;
+    } catch (error) {
+      console.error('Error saving goal transaction:', error);
+      return [];
+    }
+  };
 
   // Function to open add goal dialog
   const openAddGoalDialog = () => {
@@ -187,16 +264,42 @@ const FinanceGoal = () => {
   };
 
   // Function to open add funds dialog
-  const openAddFundsDialog = (goal: Goal) => {
+  const openAddFundsDialog = async (goal: Goal) => {
     setCurrentGoal(goal);
     setFundsToAdd("");
+    setTransactionDescription("");
     setAddFundsOpen(true);
+    
+    // Fetch transactions for this goal
+    const transactions = await fetchGoalTransactions(goal.id);
+    setGoalTransactions(transactions);
+  };
+
+  // Function to open withdraw funds dialog
+  const openWithdrawFundsDialog = async (goal: Goal) => {
+    setCurrentGoal(goal);
+    setFundsToWithdraw("");
+    setTransactionDescription("");
+    setWithdrawFundsOpen(true);
+    
+    // Fetch transactions for this goal
+    const transactions = await fetchGoalTransactions(goal.id);
+    setGoalTransactions(transactions);
+  };
+
+  // Function to open transfer funds dialog
+  const openTransferFundsDialog = async (sourceGoal: Goal) => {
+    setCurrentGoal(sourceGoal);
+    setFundsToTransfer("");
+    setTransferTargetGoalId("");
+    setTransactionDescription("");
+    setTransferFundsOpen(true);
   };
 
   const navigate = useNavigate();
 
   // Function to handle adding a new goal
-  const handleAddGoal = () => {
+  const handleAddGoal = async () => {
     if (!newGoalName || !newGoalAmount || !newGoalDeadline) {
       alert("Please fill in all fields");
       return;
@@ -208,98 +311,30 @@ const FinanceGoal = () => {
       return;
     }
 
-    const newGoal: Goal = {
-      id: goals.length > 0 ? Math.max(...goals.map((g) => g.id)) + 1 : 1,
+    // Format the data to match what the backend expects (field names match Django model)
+    const formattedGoal = {
       name: newGoalName,
-      targetAmount: targetAmount,
-      amountSaved: 0,
-      progress: 0,
+      target_amount: targetAmount,
+      current_amount: 0, // Default to 0 for new goal
       deadline: newGoalDeadline,
+      description: `Goal for ${newGoalName}`
+      // No need to include user as the backend will add the authenticated user
     };
 
-    setGoals([...goals, newGoal]);
+    try {
+      console.log("Sending goal data to backend:", formattedGoal);
+      await goalService.create(formattedGoal);
+      await refreshData();
     setAddGoalOpen(false);
-
-    // For production, you would use an API call here
-    /*
-        axios
-          .post("/api/goals", newGoal)
-          .then(response => {
-            setGoals([...goals, response.data]);
-            setAddGoalOpen(false);
-          })
-          .catch(error => {
-            console.error("Error adding goal:", error);
-            alert("Failed to add goal. Please try again.");
-          });
-        */
-  };
-
-  // Fix the withdraw funds handler function
-  const handleWithdrawFunds = () => {
-    if (!currentGoal || !fundsToWithdraw) {
-      alert("Please enter an amount to withdraw");
-      return;
+    } catch (error) {
+      console.error('Error adding goal:', error);
+      alert('Failed to add goal. Please check the console for details.');
     }
-
-    useEffect(() => {
-      // This makes the linter think handleWithdrawFunds is used
-      const noop = () => {
-        if (false) handleWithdrawFunds();
-      };
-      noop();
-      // You can include other dependencies if needed
-    }, []);
-
-    const amount = parseFloat(fundsToWithdraw);
-    if (isNaN(amount) || amount <= 0) {
-      alert("Please enter a valid amount");
-      return;
-    }
-
-    if (amount > currentGoal.amountSaved) {
-      alert("You cannot withdraw more than your current savings");
-      return;
-    }
-
-    const newAmountSaved = currentGoal.amountSaved - amount;
-    const newProgress = (newAmountSaved / currentGoal.targetAmount) * 100;
-
-    const updatedGoal: Goal = {
-      ...currentGoal,
-      amountSaved: newAmountSaved,
-      progress: Math.max(0, Math.round(newProgress)),
-    };
-
-    setGoals(
-      goals.map((goal) => (goal.id === currentGoal.id ? updatedGoal : goal))
-    );
-  
-
-    // For production, you would use an API call here
-    /*
-      axios
-        .put(`/api/goals/${currentGoal.id}/withdraw`, { amount, reason: withdrawReason })
-        .then(response => {
-          setGoals(goals.map(goal => (goal.id === currentGoal.id ? response.data : goal)));
-          setOpenWithdrawFunds(false);
-        })
-        .catch(error => {
-          console.error("Error withdrawing funds:", error);
-          alert("Failed to withdraw funds. Please try again.");
-        });
-      */
   };
 
   // Function to handle editing a goal
-  const handleEditGoal = () => {
-    if (
-      !currentGoal ||
-      !newGoalName ||
-      !newGoalAmount ||
-      !newGoalDeadline ||
-      !newSavedAmount
-    ) {
+  const handleEditGoal = async () => {
+    if (!currentGoal || !newGoalName || !newGoalAmount || !newGoalDeadline || !newSavedAmount) {
       alert("Please fill in all fields");
       return;
     }
@@ -316,63 +351,45 @@ const FinanceGoal = () => {
       return;
     }
 
-    // Calculate new progress based on the new amounts
     const newProgress = (amountSaved / targetAmount) * 100;
 
-    const updatedGoal: Goal = {
-      ...currentGoal,
+    // Format the data to match what the backend expects (field names match Django model)
+    const updatedGoal = {
       name: newGoalName,
-      targetAmount: targetAmount,
-      amountSaved: amountSaved,
+      target_amount: targetAmount,
+      current_amount: amountSaved,
       deadline: newGoalDeadline,
-      progress: Math.min(100, Math.round(newProgress)),
+      description: `Goal for ${newGoalName}`
+      // progress is calculated by the backend
     };
 
-    setGoals(
-      goals.map((goal) => (goal.id === currentGoal.id ? updatedGoal : goal))
-    );
+    try {
+      console.log("Updating goal with data:", updatedGoal);
+      await goalService.update(currentGoal.id, updatedGoal);
+      await refreshData();
     setEditGoalOpen(false);
-
-    // For production, you would use an API call here
-    /*
-        axios
-          .put(`/api/goals/${currentGoal.id}`, updatedGoal)
-          .then(response => {
-            setGoals(goals.map(goal => (goal.id === currentGoal.id ? response.data : goal)));
-            setEditGoalOpen(false);
-          })
-          .catch(error => {
-            console.error("Error updating goal:", error);
-            alert("Failed to update goal. Please try again.");
-          });
-        */
+    } catch (error) {
+      console.error('Error updating goal:', error);
+      alert('Failed to update goal. Please check the console for details.');
+    }
   };
 
   // Function to handle deleting a goal
-  const handleDeleteGoal = () => {
+  const handleDeleteGoal = async () => {
     if (!currentGoal) return;
 
-    // Filter out the goal to be deleted
-    setGoals(goals.filter((goal) => goal.id !== currentGoal.id));
+    try {
+      await goalService.delete(currentGoal.id);
+      await refreshData();
     setDeleteGoalOpen(false);
-
-    // For production, you would use an API call here
-    /*
-        axios
-          .delete(`/api/goals/${currentGoal.id}`)
-          .then(() => {
-            setGoals(goals.filter(goal => goal.id !== currentGoal.id));
-            setDeleteGoalOpen(false);
-          })
-          .catch(error => {
-            console.error("Error deleting goal:", error);
-            alert("Failed to delete goal. Please try again.");
-          });
-        */
+    } catch (error) {
+      console.error('Error deleting goal:', error);
+      alert('Failed to delete goal');
+    }
   };
 
-  // Function to handle adding funds to a goal
-  const handleAddFunds = () => {
+  // Function to handle adding funds to a goal - fixed endpoint handling
+  const handleAddFunds = async () => {
     if (!currentGoal || !fundsToAdd) {
       alert("Please enter an amount to add");
       return;
@@ -384,89 +401,175 @@ const FinanceGoal = () => {
       return;
     }
 
-    const newAmountSaved = currentGoal.amountSaved + amount;
-    const newProgress = (newAmountSaved / currentGoal.targetAmount) * 100;
+    try {
+      console.log(`Adding ${amount} funds to goal ${currentGoal.id}`);
 
-    const updatedGoal: Goal = {
+      // Calculate new amount and update using the correct field names
+      const updatedAmount = currentGoal.amountSaved + amount;
+      
+      const updatedGoal = {
       ...currentGoal,
-      amountSaved: newAmountSaved,
-      progress: Math.min(100, Math.round(newProgress)),
-    };
-
-    setGoals(
-      goals.map((goal) => (goal.id === currentGoal.id ? updatedGoal : goal))
-    );
-    setAddFundsOpen(false);
-
-    // For production, you would use an API call here
-    /*
-        axios
-          .put(`/api/goals/${currentGoal.id}/funds`, { amount })
-          .then(response => {
-            setGoals(goals.map(goal => (goal.id === currentGoal.id ? response.data : goal)));
+        current_amount: updatedAmount,
+        // Don't need to send progress as it's calculated by the backend
+        // Convert targetAmount to target_amount for the backend
+        target_amount: currentGoal.targetAmount,
+        // Keep other fields the same but with correct names
+        name: currentGoal.name,
+        deadline: currentGoal.deadline,
+        description: `Goal for ${currentGoal.name}`
+      };
+      
+      await goalService.update(currentGoal.id, updatedGoal);
+      
+      // Save the transaction
+      await saveGoalTransaction(currentGoal.id, {
+        type: 'deposit',
+        amount: amount,
+        description: transactionDescription || `Added funds to ${currentGoal.name}`,
+        balance: updatedAmount
+      });
+      
+      await refreshData();
             setAddFundsOpen(false);
-          })
-          .catch(error => {
-            console.error("Error adding funds:", error);
-            alert("Failed to add funds. Please try again.");
-          });
-        */
+    } catch (error) {
+      console.error('Error adding funds:', error);
+      alert('Failed to add funds. Please check the console for details.');
+    }
   };
 
-  // Fetch goals data
-  useEffect(() => {
-    setIsLoading(true);
-    setError(null);
+  // Function to handle withdrawing funds from a goal - fixed endpoint handling
+  const handleWithdrawFunds = async () => {
+    if (!currentGoal || !fundsToWithdraw) {
+      alert("Please enter an amount to withdraw");
+      return;
+    }
 
-    // For development, you can use a mock API response
-    const mockGoals = [
-      {
-        id: 1,
-        name: "Emergency Fund",
-        targetAmount: 5000,
-        amountSaved: 2000,
-        progress: 50,
-        deadline: "2025-06-30",
-      },
-      {
-        id: 2,
-        name: "Vacation",
-        targetAmount: 3000,
-        amountSaved: 1200,
-        progress: 40,
-        deadline: "2025-12-15",
-      },
-    ];
+    const amount = parseFloat(fundsToWithdraw);
+    if (isNaN(amount) || amount <= 0) {
+      alert("Please enter a valid amount");
+      return;
+    }
 
-    // Simulating API call - replace with actual API call in production
-    setTimeout(() => {
-      setGoals(mockGoals);
-      setIsLoading(false);
-    }, 1000);
+    if (amount > currentGoal.amountSaved) {
+      alert("You cannot withdraw more than your current savings");
+      return;
+    }
 
-    // Uncomment for actual API implementation
-    /*
-        axios
-          .get("/api/goals")
-          .then((response) => {
-            setGoals(Array.isArray(response.data) ? response.data : []);
-            setIsLoading(false);
-          })
-          .catch((error) => {
-            console.error("API Error:", error);
-            setError("Failed to load goals. Please try again.");
-            setGoals([]);
-            setIsLoading(false);
-          });
-        */
-  }, []);
+    try {
+      console.log(`Withdrawing ${amount} funds from goal ${currentGoal.id}`);
+      
+      // Calculate new amount and update using the correct field names
+      const updatedAmount = currentGoal.amountSaved - amount;
+      
+      const updatedGoal = {
+        ...currentGoal,
+        current_amount: updatedAmount,
+        // Don't need to send progress as it's calculated by the backend
+        // Convert targetAmount to target_amount for the backend
+        target_amount: currentGoal.targetAmount,
+        // Keep other fields the same but with correct names
+        name: currentGoal.name,
+        deadline: currentGoal.deadline,
+        description: `Goal for ${currentGoal.name}`
+      };
+      
+      await goalService.update(currentGoal.id, updatedGoal);
+      
+      // Save the transaction
+      await saveGoalTransaction(currentGoal.id, {
+        type: 'withdrawal',
+        amount: amount,
+        description: transactionDescription || `Withdrew funds from ${currentGoal.name}`,
+        balance: updatedAmount
+      });
+      
+      await refreshData();
+      setWithdrawFundsOpen(false);
+    } catch (error) {
+      console.error('Error withdrawing funds:', error);
+      alert('Failed to withdraw funds. Please check the console for details.');
+    }
+  };
 
-  // Format currency values
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "PHP",
-    }).format(amount);
+  // Function to handle transferring funds between goals
+  const handleTransferFunds = async () => {
+    if (!currentGoal || !fundsToTransfer || !transferTargetGoalId) {
+      alert("Please complete all required fields");
+      return;
+    }
+
+    const amount = parseFloat(fundsToTransfer);
+    if (isNaN(amount) || amount <= 0) {
+      alert("Please enter a valid amount");
+      return;
+    }
+
+    if (amount > currentGoal.amountSaved) {
+      alert("You cannot transfer more than your current savings");
+      return;
+    }
+
+    const targetGoal = localGoals.find(g => g.id === transferTargetGoalId);
+    if (!targetGoal) {
+      alert("Target goal not found");
+      return;
+    }
+
+    try {
+      console.log(`Transferring ${amount} from goal ${currentGoal.id} to goal ${targetGoal.id}`);
+      
+      // Calculate updated values for source goal
+      const sourceUpdatedAmount = currentGoal.amountSaved - amount;
+      
+      // Calculate updated values for target goal
+      const targetUpdatedAmount = targetGoal.amountSaved + amount;
+      
+      // Update source goal with correct field names
+      const sourceGoalUpdate = {
+        name: currentGoal.name,
+        target_amount: currentGoal.targetAmount,
+        current_amount: sourceUpdatedAmount,
+        deadline: currentGoal.deadline,
+        description: `Transfer to ${targetGoal.name}`
+      };
+      
+      // Update target goal with correct field names
+      const targetGoalUpdate = {
+        name: targetGoal.name,
+        target_amount: targetGoal.targetAmount,
+        current_amount: targetUpdatedAmount,
+        deadline: targetGoal.deadline,
+        description: `Transfer from ${currentGoal.name}`
+      };
+      
+      // First withdraw from source goal
+      await goalService.update(currentGoal.id, sourceGoalUpdate);
+      
+      // Then add to target goal
+      await goalService.update(targetGoal.id, targetGoalUpdate);
+      
+      // Save withdrawal transaction
+      await saveGoalTransaction(currentGoal.id, {
+        type: 'withdrawal',
+        amount: amount,
+        description: transactionDescription || `Transfer to ${targetGoal.name}`,
+        balance: sourceUpdatedAmount
+      });
+      
+      // Save deposit transaction
+      await saveGoalTransaction(targetGoal.id, {
+        type: 'deposit',
+        amount: amount,
+        description: transactionDescription || `Transfer from ${currentGoal.name}`,
+        balance: targetUpdatedAmount
+      });
+      
+      await refreshData();
+      setTransferFundsOpen(false);
+    } catch (error) {
+      console.error('Error transferring funds:', error);
+      alert('Failed to transfer funds. Please check the console for details.');
+    }
   };
 
   // Format date values
@@ -479,10 +582,36 @@ const FinanceGoal = () => {
     return new Date(dateString).toLocaleDateString("en-US", options);
   };
 
-  const [note, setNote] = useState(
-    "- Added +1,000 on my Emergency Fund on March 12, 2025"
-  );
-
+  // Fetch all transactions for all goals
+  useEffect(() => {
+    const fetchAllTransactions = async () => {
+      if (localGoals && localGoals.length > 0) {
+        let transactions: Transaction[] = [];
+        
+        for (const goal of localGoals) {
+          const goalTransactions = await fetchGoalTransactions(goal.id);
+          if (goalTransactions.length > 0) {
+            // Add goal name to each transaction
+            transactions = [
+              ...transactions,
+              ...goalTransactions.map((tx: Transaction) => ({
+                ...tx,
+                goalName: goal.name,
+                goalId: goal.id
+              }))
+            ];
+          }
+        }
+        
+        // Sort by date, newest first
+        transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        setAllTransactions(transactions);
+      }
+    };
+    
+    fetchAllTransactions();
+  }, [localGoals]);
   
   return (
     <div className="flex h-screen bg-indigo-100 overflow-hidden">
@@ -937,6 +1066,37 @@ const FinanceGoal = () => {
                     onChange={(e) => setFundsToAdd(e.target.value)}
                   />
                 </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="transactionDescription">Description (optional)</Label>
+                  <Input
+                    id="transactionDescription"
+                    placeholder="e.g., Bonus from work"
+                    value={transactionDescription}
+                    onChange={(e) => setTransactionDescription(e.target.value)}
+                  />
+                </div>
+
+                {goalTransactions.length > 0 && (
+                  <div className="mt-2">
+                    <Label className="mb-2 block">Recent Transactions</Label>
+                    <div className="max-h-40 overflow-y-auto bg-gray-50 rounded p-2 text-sm">
+                      {goalTransactions
+                        .filter(tx => tx.type === 'deposit')
+                        .slice(0, 5)
+                        .map(tx => (
+                          <div key={tx.id} className="flex justify-between py-1 border-b border-gray-100">
+                            <div className="text-green-600 flex items-center gap-1">
+                              <Plus size={12} />
+                              <span>{formatCurrency(tx.amount)}</span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {formatDate(tx.date).slice(0, 6)}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button
@@ -955,6 +1115,191 @@ const FinanceGoal = () => {
             </DialogContent>
           </Dialog>
 
+          {/* Withdraw Funds Dialog */}
+          <Dialog open={withdrawFundsOpen} onOpenChange={setWithdrawFundsOpen}>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Withdraw Funds from Goal</DialogTitle>
+                <DialogDescription>
+                  {currentGoal
+                    ? `Withdraw from your savings for ${currentGoal.name}`
+                    : "Withdraw from your savings"}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                {currentGoal && (
+                  <div className="bg-gray-50 p-3 rounded">
+                    <div className="flex justify-between mb-2">
+                      <span>Current savings:</span>
+                      <span className="font-semibold">
+                        {formatCurrency(currentGoal.amountSaved)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Target amount:</span>
+                      <span className="font-semibold">
+                        {formatCurrency(currentGoal.targetAmount)}
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      <Progress
+                        value={currentGoal.progress}
+                        className="h-2 w-full"
+                      />
+                      <div className="flex justify-between mt-1 text-xs text-gray-500">
+                        <span>{currentGoal.progress}% complete</span>
+                        <span>
+                          {formatCurrency(
+                            currentGoal.targetAmount - currentGoal.amountSaved
+                          )}{" "}
+                          remaining
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="grid gap-2">
+                  <Label htmlFor="withdrawAmount">Amount to Withdraw (₱)</Label>
+                  <Input
+                    id="withdrawAmount"
+                    type="number"
+                    placeholder="500"
+                    value={fundsToWithdraw}
+                    onChange={(e) => setFundsToWithdraw(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="withdrawDescription">Description (optional)</Label>
+                  <Input
+                    id="withdrawDescription"
+                    placeholder="e.g., Emergency expense"
+                    value={transactionDescription}
+                    onChange={(e) => setTransactionDescription(e.target.value)}
+                  />
+                </div>
+
+                {goalTransactions.length > 0 && (
+                  <div className="mt-2">
+                    <Label className="mb-2 block">Recent Transactions</Label>
+                    <div className="max-h-40 overflow-y-auto bg-gray-50 rounded p-2 text-sm">
+                      {goalTransactions
+                        .filter(tx => tx.type === 'withdrawal')
+                        .slice(0, 5)
+                        .map(tx => (
+                          <div key={tx.id} className="flex justify-between py-1 border-b border-gray-100">
+                            <div className="text-red-600 flex items-center gap-1">
+                              <Minus size={12} />
+                              <span>{formatCurrency(tx.amount)}</span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {formatDate(tx.date).slice(0, 6)}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setWithdrawFundsOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                  onClick={handleWithdrawFunds}
+                >
+                  Withdraw Funds
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Transfer Funds Dialog */}
+          <Dialog open={transferFundsOpen} onOpenChange={setTransferFundsOpen}>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>Transfer Funds Between Goals</DialogTitle>
+                <DialogDescription>
+                  {currentGoal
+                    ? `Transfer funds from ${currentGoal.name} to another goal`
+                    : "Transfer funds between goals"}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                {currentGoal && (
+                  <div className="bg-gray-50 p-3 rounded">
+                    <div className="flex justify-between mb-2">
+                      <span>Source goal:</span>
+                      <span className="font-semibold">
+                        {currentGoal.name}
+                      </span>
+                    </div>
+                    <div className="flex justify-between mb-2">
+                      <span>Available funds:</span>
+                      <span className="font-semibold">
+                        {formatCurrency(currentGoal.amountSaved)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                <div className="grid gap-2">
+                  <Label htmlFor="transferAmount">Amount to Transfer (₱)</Label>
+                  <Input
+                    id="transferAmount"
+                    type="number"
+                    placeholder="500"
+                    value={fundsToTransfer}
+                    onChange={(e) => setFundsToTransfer(e.target.value)}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="targetGoal">Transfer to Goal</Label>
+                  <select
+                    id="targetGoal"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    value={transferTargetGoalId}
+                    onChange={(e) => setTransferTargetGoalId(e.target.value)}
+                  >
+                    <option value="" disabled>Select a goal</option>
+                    {localGoals
+                      .filter(g => g.id !== currentGoal?.id)
+                      .map(goal => (
+                        <option key={goal.id} value={goal.id}>
+                          {goal.name} ({formatCurrency(goal.amountSaved)} / {formatCurrency(goal.targetAmount)})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="transferDescription">Description (optional)</Label>
+                  <Input
+                    id="transferDescription"
+                    placeholder="e.g., Moving emergency funds to vacation"
+                    value={transactionDescription}
+                    onChange={(e) => setTransactionDescription(e.target.value)}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setTransferFundsOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  onClick={handleTransferFunds}
+                >
+                  Transfer Funds
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
           {/* Top Stats Overview */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <Card className="p-4 bg-white shadow-md">
@@ -963,7 +1308,7 @@ const FinanceGoal = () => {
                   <p className="text-gray-500 flex">Total Savings</p>
                   <h3 className="text-2xl font-bold">
                     {formatCurrency(
-                      goals.reduce((sum, goal) => sum + goal.amountSaved, 0)
+                      localGoals.reduce((sum, goal) => sum + goal.amountSaved, 0)
                     )}
                   </h3>
                 </div>
@@ -977,7 +1322,7 @@ const FinanceGoal = () => {
               <div className="flex justify-between items-center">
                 <div>
                   <p className="text-gray-500">Active Goals</p>
-                  <h3 className="text-2xl font-bold">{goals.length}</h3>
+                  <h3 className="text-2xl font-bold">{localGoals.length}</h3>
                 </div>
                 <div className="p-3 bg-indigo-100 rounded-full">
                   <List className="w-6 h-6 text-indigo-900" />
@@ -990,10 +1335,10 @@ const FinanceGoal = () => {
                 <div>
                   <p className="text-gray-500">Average Progress</p>
                   <h3 className="text-2xl font-bold">
-                    {goals.length
+                    {localGoals.length
                       ? Math.round(
-                          goals.reduce((sum, goal) => sum + goal.progress, 0) /
-                            goals.length
+                          localGoals.reduce((sum, goal) => sum + goal.progress, 0) /
+                            localGoals.length
                         )
                       : 0}
                     %
@@ -1014,7 +1359,7 @@ const FinanceGoal = () => {
                   Financial Goals
                 </h2>
                 <Button
-                  className="bg-indigo-400 hover:bg-indigo-600"
+                  className="bg-indigo-500 hover:bg-indigo-600"
                   onClick={openAddGoalDialog}
                 >
                   <Plus className="w-4 h-4 mr-2" /> Add Goal
@@ -1022,22 +1367,18 @@ const FinanceGoal = () => {
               </div>
             </CardHeader>
             <CardContent className="p-4">
-              {isLoading ? (
-                <div className="text-center py-8">
-                  <p>Loading goals...</p>
+              {loading ? (
+                <div className="flex items-center justify-center h-full">
+                  <LoadingSpinner />
                 </div>
               ) : error ? (
-                <div className="text-center py-8 text-red-500">
+                <div className="text-center text-red-500">
                   <p>{error}</p>
-                  <Button
-                    variant="outline"
-                    className="mt-2"
-                    onClick={() => window.location.reload()}
-                  >
+                  <Button onClick={refreshData} className="mt-4">
                     Retry
                   </Button>
                 </div>
-              ) : goals.length === 0 ? (
+              ) : localGoals.length === 0 ? (
                 <div className="text-center py-8">
                   <p>No goals found. Create your first financial goal!</p>
                   <Button
@@ -1060,7 +1401,7 @@ const FinanceGoal = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {goals.map((goal) => (
+                    {localGoals.map((goal) => (
                       <TableRow key={goal.id} className="hover:bg-gray-50">
                         <TableCell className="font-medium">
                           {goal.name}
@@ -1098,6 +1439,40 @@ const FinanceGoal = () => {
                             <Button
                               variant="ghost"
                               size="icon"
+                              onClick={() => openWithdrawFundsDialog(goal)}
+                              title="Withdraw Funds"
+                            >
+                              <Minus className="h-4 w-4 text-red-500" />
+                            </Button>
+                            {localGoals.length > 1 && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => openTransferFundsDialog(goal)}
+                                title="Transfer Funds"
+                              >
+                                <svg 
+                                  xmlns="http://www.w3.org/2000/svg" 
+                                  width="16" 
+                                  height="16" 
+                                  viewBox="0 0 24 24" 
+                                  fill="none" 
+                                  stroke="currentColor" 
+                                  strokeWidth="2" 
+                                  strokeLinecap="round" 
+                                  strokeLinejoin="round" 
+                                  className="h-4 w-4 text-blue-500"
+                                >
+                                  <path d="M17 3L21 7L17 11"></path>
+                                  <path d="M21 7H13"></path>
+                                  <path d="M7 21L3 17L7 13"></path>
+                                  <path d="M3 17H11"></path>
+                                </svg>
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => openEditGoalDialog(goal)}
                               title="Edit Goal"
                             >
@@ -1121,22 +1496,69 @@ const FinanceGoal = () => {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-2">
-            <Card className=" bg-white gap-4 mt-6">
-              <CardHeader className="pb-2">
-                <CardTitle className=" md:text-base text-lg font-bold">
-                  Notes
-                </CardTitle>
+          {/* Transaction History */}
+          <Card className="shadow-md mt-6">
+            <CardHeader className="pb-0">
+              <div className="flex justify-between items-center">
+                <h2 className="md:text-base text-xl font-semibold">
+                  Transaction History
+                </h2>
+              </div>
               </CardHeader>
-              <CardContent>
-                <Textarea
-                  className="bg-gray-100 text-sm md:text-base min-h-24"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                />
+            <CardContent className="p-4">
+              {allTransactions.length === 0 ? (
+                <div className="text-center py-8">
+                  <p>No transactions found. Add funds to your goals to see transaction history.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50">
+                      <TableHead>Date</TableHead>
+                      <TableHead>Goal</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead className="text-right">Balance</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allTransactions.map((transaction) => (
+                      <TableRow key={transaction.id} className="hover:bg-gray-50">
+                        <TableCell>{formatDate(transaction.date)}</TableCell>
+                        <TableCell>{transaction.goalName}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {transaction.type === 'deposit' ? (
+                              <div className="flex items-center text-green-600">
+                                <Plus size={16} />
+                                <span>Deposit</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center text-red-600">
+                                <Minus size={16} />
+                                <span>Withdrawal</span>
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>{transaction.description}</TableCell>
+                        <TableCell className={`text-right ${
+                          transaction.type === 'deposit' ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {transaction.type === 'deposit' ? '+' : '-'}
+                          {formatCurrency(transaction.amount)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(transaction.balance)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
               </CardContent>
             </Card>
-          </div>
         </main>
       </div>
 

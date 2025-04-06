@@ -79,9 +79,30 @@ class Budget(models.Model):
     end_date = models.DateField()
     description = models.TextField(blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    period = models.CharField(max_length=10, choices=[('daily', 'Daily'), ('weekly', 'Weekly'), ('monthly', 'Monthly')], default='monthly')
 
     def __str__(self):
         return f"{self.name} (${self.current_amount}/${self.target_amount})"
+
+class BudgetItem(models.Model):
+    budget = models.ForeignKey(Budget, related_name='items', on_delete=models.CASCADE)
+    category = models.CharField(max_length=100)
+    planned = models.DecimalField(max_digits=10, decimal_places=2)
+    actual = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    color = models.CharField(max_length=20, blank=True, null=True)  # For storing color code
+
+    @property
+    def remaining(self):
+        return self.planned - self.actual
+    
+    @property
+    def progress(self):
+        if self.planned <= 0:
+            return 0
+        return min(100, (self.actual / self.planned) * 100)
+
+    def __str__(self):
+        return f"{self.category} (${self.actual}/${self.planned})"
 
 class Goal(models.Model):
     name = models.CharField(max_length=100)

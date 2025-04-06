@@ -1,6 +1,6 @@
 import { useAuth } from "@/context/AuthContext";
 import { LoadingSpinner } from "@/components/common/LoadingSpinner";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Link, useNavigate } from "react-router-dom";
@@ -13,6 +13,7 @@ import {
   Menu,
   Settings,
   Save,
+  PiggyBank,
 } from "lucide-react";
 import darkfont from "@/assets/imgs/darkfont.webp";
 import userimg from "@/assets/imgs/user.webp";
@@ -48,6 +49,21 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import { useFinance } from "@/context/FinanceContext";
+import {
+  CardHeader,
+  CardTitle,
+  CardContent as UiCardContent,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { formatCurrency, formatDate } from "@/lib/utils";
 
 // Define types for the data structure
 interface ChartData {
@@ -55,16 +71,6 @@ interface ChartData {
   income: number;
   expenses: number;
 }
-
-// Sample data for Income vs Expenses chart
-const data: ChartData[] = [
-  { day: "Oct", income: 10000, expenses: 8342 },
-  { day: "Nov", income: 8746, expenses: 4328 },
-  { day: "Dec", income: 9342, expenses: 8828 },
-  { day: "Jan", income: 11735, expenses: 11314 },
-  { day: "Feb", income: 15000, expenses: 12984 },
-  { day: "Mar", income: 16500, expenses: 4965 },
-];
 
 // Define prop types for the NavItem component
 interface NavItemProps {
@@ -100,40 +106,180 @@ const NavItem: React.FC<NavItemProps> = ({
       </span>
     )}
   </div>
-
-);
-const handleLogout = async () => {
-  await logout();
-  navigate('/login');
-};
-
-// Define prop types for the StatCard component
-interface StatCardProps {
-  title: string;
-  amount: string;
-}
-
-const StatCard: React.FC<StatCardProps> = ({ title, amount }) => (
-  <Card className="p-4 bg-white shadow-lg rounded-2xl">
-    <CardContent className="text-center">
-      <h2 className="text-lg font-semibold text-gray-700">{title}</h2>
-      <p className="text-2xl font-bold text-black">{amount}</p>
-    </CardContent>
-  </Card>
 );
 
 const Dashboard: React.FC = () => {
-  const { user, loading, logout } = useAuth();
+  const { user, loading: authLoading, logout } = useAuth();
   const navigate = useNavigate();
-  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false); // Default closed on mobile
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isMobile, setIsMobile] = useState<boolean>(false);
+  const [chartData, setChartData] = useState<ChartData[]>([]);
+
+  // Initialize user data from auth context
+  const [fullName, setFullName] = useState<string>(user?.full_name || "");
+  const [email, setEmail] = useState<string>(user?.email || "");
+  const [username, setUsername] = useState<string>(user?.username || "");
+  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [openPopover, setOpenPopover] = useState<boolean>(false);
+  const [emailNotifications, setEmailNotifications] = useState<boolean>(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(false);
+
+  const { income, expenses, goals, loading: financeLoading, error, refreshData } = useFinance();
+
+  // Calculate totals from context data with safety checks
+  const totalIncome = Array.isArray(income) 
+    ? income.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+    : 0;
+    
+  const totalExpenses = Array.isArray(expenses) 
+    ? expenses.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+    : 0;
+    
+  const totalSavings = Array.isArray(goals) 
+    ? goals.reduce((sum, item) => {
+        const amount = typeof item.amountSaved !== 'undefined' 
+          ? Number(item.amountSaved) 
+          : (typeof item.current_amount !== 'undefined' ? Number(item.current_amount) : 0);
+        return sum + amount;
+      }, 0)
+    : 0;
+    
+  const netIncome = totalIncome - totalExpenses;
+
+  // Load saved colors from localStorage for visualization
+  useEffect(() => {
+    try {
+      // Load income colors
+      const incomeColors = JSON.parse(localStorage.getItem('incomeColors') || '{}');
+      console.log("Dashboard loaded income colors:", incomeColors);
+      
+      // Load expense colors
+      const expenseColors = JSON.parse(localStorage.getItem('expenseColors') || '{}');
+      console.log("Dashboard loaded expense colors:", expenseColors);
+    } catch (e) {
+      console.error("Error loading color data in dashboard:", e);
+    }
+  }, []);
+
+  // Update chart data when income or expenses change
+  useEffect(() => {
+    if (Array.isArray(income) && Array.isArray(expenses)) {
+      console.log("Updating chart data with:", { income, expenses });
+      
+      // Group income and expenses by month
+      const monthlyData = new Map<string, { income: number; expenses: number }>();
+      
+      // Process income
+      income.forEach(item => {
+        if (!item.date) return; // Skip items without dates
+        
+        try {
+          const date = new Date(item.date);
+          const month = date.toLocaleString('default', { month: 'short' });
+          const current = monthlyData.get(month) || { income: 0, expenses: 0 };
+          const amount = Number(item.amount) || 0;
+          monthlyData.set(month, { 
+            ...current, 
+            income: current.income + amount
+          });
+        } catch (e) {
+          console.error("Error processing income item for chart:", item, e);
+        }
+      });
+
+      // Process expenses
+      expenses.forEach(item => {
+        if (!item.date) return; // Skip items without dates
+        
+        try {
+          const date = new Date(item.date);
+          const month = date.toLocaleString('default', { month: 'short' });
+          const current = monthlyData.get(month) || { income: 0, expenses: 0 };
+          const amount = Number(item.amount) || 0;
+          monthlyData.set(month, { 
+            ...current, 
+            expenses: current.expenses + amount
+          });
+        } catch (e) {
+          console.error("Error processing expense item for chart:", item, e);
+        }
+      });
+
+      // Convert to array format for chart, sorted by month
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const chartDataArray = Array.from(monthlyData.entries())
+        .map(([month, data]) => ({
+          day: month,
+          income: data.income,
+          expenses: data.expenses
+        }))
+        .sort((a, b) => months.indexOf(a.day) - months.indexOf(b.day));
+
+      console.log("Generated chart data:", chartDataArray);
+      setChartData(chartDataArray);
+    }
+  }, [income, expenses]);
+
+  // Get recent transactions with more reliable handling
+  const recentTransactions = useMemo(() => {
+    try {
+      if (!Array.isArray(income) || !Array.isArray(expenses)) {
+        return [];
+      }
+      
+      // Combine income and expenses with proper type labeling
+      const allTransactions = [
+        ...income.map(item => ({
+          ...item,
+          transactionType: 'income',
+          // Use the saved color from localStorage if available
+          color: (() => {
+            try {
+              const colors = JSON.parse(localStorage.getItem('incomeColors') || '{}');
+              return colors[item.id] || '#3B82F6'; // Default blue
+            } catch (e) {
+              return '#3B82F6'; // Default blue if error
+            }
+          })()
+        })),
+        ...expenses.map(item => ({
+          ...item,
+          transactionType: 'expense',
+          // Use the saved color from localStorage if available
+          color: (() => {
+            try {
+              const colors = JSON.parse(localStorage.getItem('expenseColors') || '{}');
+              return colors[item.id] || '#EF4444'; // Default red
+            } catch (e) {
+              return '#EF4444'; // Default red if error
+            }
+          })()
+        }))
+      ]
+      // Sort by date (most recent first)
+      .sort((a, b) => {
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      })
+      // Take only the 5 most recent
+      .slice(0, 5);
+      
+      console.log("Recent transactions:", allTransactions);
+      return allTransactions;
+    } catch (e) {
+      console.error("Error processing transactions:", e);
+      return [];
+    }
+  }, [income, expenses]);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       navigate('/login');
     }
-  }, [user, loading, navigate]);
+  }, [user, authLoading, navigate]);
+
   // Check for mobile screen size
   useEffect(() => {
     const checkIfMobile = () => {
@@ -148,20 +294,26 @@ const Dashboard: React.FC = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  const [fullName, setFullName] = useState<string>("Test User");
-  const [email, setEmail] = useState<string>("test@example.com");
-  const [username, setUsername] = useState<string>("TestUser");
-  const [isEditing, setIsEditing] = useState<boolean>(false);
-  const [openPopover, setOpenPopover] = useState<boolean>(false);
-  const [emailNotifications, setEmailNotifications] = useState<boolean>(false);
-  const [notificationsEnabled, setNotificationsEnabled] =
-    useState<boolean>(false);
-  const navigate = useNavigate();
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
-  if (loading || !user) {
+  // Add useEffect to properly map goal data
+  useEffect(() => {
+    if (goals && Array.isArray(goals) && goals.length > 0) {
+      console.log("Dashboard processing goals:", goals);
+    }
+  }, [goals]);
+
+  if (authLoading || financeLoading) {
     return <LoadingSpinner />;
   }
-  
+
+  if (!user) {
+    return null;
+  }
+
   return (
     <div className="flex h-screen bg-indigo-100 overflow-hidden">
       {/* Sidebar */}
@@ -189,7 +341,7 @@ const Dashboard: React.FC = () => {
               icon={Home}
               label="Dashboard"
               active={true}
-              isSidebarOpen={true} // Always show labels in sidebar
+              isSidebarOpen={true}
             />
           </Link>
           <Link to="/income">
@@ -213,7 +365,6 @@ const Dashboard: React.FC = () => {
         <header className="bg-white shadow-sm z-30 p-4">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-3">
-              {/* Menu toggle button - only visible on mobile */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -233,7 +384,6 @@ const Dashboard: React.FC = () => {
                   About Us
                 </button>
               </Link>
-              {/* Avatar with Dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Avatar className="h-10 w-10 cursor-pointer">
@@ -249,7 +399,6 @@ const Dashboard: React.FC = () => {
                   align="end"
                   className="w-48 bg-white shadow-lg rounded-md"
                 >
-                  {/* Responsive Popover */}
                   <Popover
                     open={openPopover}
                     onOpenChange={setOpenPopover}
@@ -257,7 +406,7 @@ const Dashboard: React.FC = () => {
                   >
                     <PopoverTrigger asChild>
                       <DropdownMenuItem
-                        onSelect={(e) => e.preventDefault()} // Prevents dropdown from closing
+                        onSelect={(e) => e.preventDefault()}
                         onClick={() => setOpenPopover(true)}
                       >
                         View Profile
@@ -269,12 +418,10 @@ const Dashboard: React.FC = () => {
                       className="w-[60vw] max-w-xs sm:max-w-sm md:w-80 p-3 sm:p-4 bg-white shadow-lg rounded-md"
                       sideOffset={isMobile ? 5 : 10}
                     >
-                      {/* Personal Information */}
                       <h2 className="text-lg sm:text-xl font-semibold">
                         Personal Information
                       </h2>
                       <div className="relative mt-2 p-3 sm:p-4 pb-2 rounded-lg border bg-gray-100">
-                        {/* Toggle button - with more space below content */}
                         <button
                           className="absolute bottom-2 right-2 text-gray-600 hover:text-gray-800"
                           onClick={() => setIsEditing(!isEditing)}
@@ -337,7 +484,6 @@ const Dashboard: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Notification Settings */}
                       <div className="mt-3 sm:mt-4 p-3 sm:p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
                         <div className="flex-1 pr-2">
                           <h3 className="text-sm sm:text-md font-semibold">
@@ -353,7 +499,6 @@ const Dashboard: React.FC = () => {
                         />
                       </div>
 
-                      {/* Email Notifications */}
                       <div className="mt-2 p-3 sm:p-4 rounded-lg border bg-gray-100 flex justify-between items-center">
                         <div className="flex-1 pr-2">
                           <h3 className="text-sm sm:text-md font-semibold">
@@ -412,10 +557,48 @@ const Dashboard: React.FC = () => {
           </AlertDialog>
 
           {/* Stats Cards */}
-          <div className="text-base sm:text-lg md:text-xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <StatCard title="Total Income" amount="₱16,500.00" />
-            <StatCard title="Total Expenses" amount="₱4,965.00" /> 
-            <StatCard title="Total Savings" amount="₱3,200.00" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <Card className="p-4 bg-white shadow-md">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-gray-500">Total Income</p>
+                  <h3 className="text-2xl font-bold text-blue-600">
+                    {formatCurrency(totalIncome)}
+                  </h3>
+                </div>
+                <div className="p-3 bg-blue-100 rounded-full">
+                  <Wallet className="w-6 h-6 text-blue-600" />
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-4 bg-white shadow-md">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-gray-500">Total Expenses</p>
+                  <h3 className="text-2xl font-bold text-red-600">
+                    {formatCurrency(totalExpenses)}
+                  </h3>
+                </div>
+                <div className="p-3 bg-red-100 rounded-full">
+                  <CreditCard className="w-6 h-6 text-red-600" />
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-4 bg-white shadow-md">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-gray-500">Net Income</p>
+                  <h3 className={`text-2xl font-bold ${netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(netIncome)}
+                  </h3>
+                </div>
+                <div className={`p-3 ${netIncome >= 0 ? 'bg-green-100' : 'bg-red-100'} rounded-full`}>
+                  <PiggyBank className={`w-6 h-6 ${netIncome >= 0 ? 'text-green-600' : 'text-red-600'}`} />
+                </div>
+              </div>
+            </Card>
           </div>
 
           {/* Income vs Expenses Chart */}
@@ -425,98 +608,225 @@ const Dashboard: React.FC = () => {
                 Income vs Expenses
               </h2>
               <p className="text-base sm:text-lg md:text-xl text-gray-500 mb-4">
-                Track your income and expenses over time with this interactive
-                chart.
+                Track your income and expenses over time with this interactive chart.
               </p>
               <div className="w-full h-[250px] sm:h-[300px] md:h-[350px] lg:h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart
-                    data={data}
-                    margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="colorIncome"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#3b82f6"
-                          stopOpacity={0.8}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#3b82f6"
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                      <linearGradient
-                        id="colorExpenses"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#ef4444"
-                          stopOpacity={0.8}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#ef4444"
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={chartData}
+                      margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient
+                          id="colorIncome"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor="#3b82f6"
+                            stopOpacity={0.8}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor="#3b82f6"
+                            stopOpacity={0}
+                          />
+                        </linearGradient>
+                        <linearGradient
+                          id="colorExpenses"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor="#ef4444"
+                            stopOpacity={0.8}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor="#ef4444"
+                            stopOpacity={0}
+                          />
+                        </linearGradient>
+                      </defs>
 
-                    {/* Add grid here */}
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-
-                    <XAxis dataKey="day" />
-                    <YAxis />
-                    <Tooltip />
-                    <Area
-                      type="monotone"
-                      dataKey="income"
-                      stroke="#3b82f6"
-                      fill="url(#colorIncome)"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="expenses"
-                      stroke="#ef4444"
-                      fill="url(#colorExpenses)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis dataKey="day" />
+                      <YAxis tickFormatter={(value) => formatCurrency(value).replace('.00', '')} />
+                      <Tooltip 
+                        formatter={(value: number) => formatCurrency(value)}
+                        labelFormatter={(label) => `${label}`}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="income"
+                        name="Income"
+                        stroke="#3b82f6"
+                        fill="url(#colorIncome)"
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="expenses"
+                        name="Expenses"
+                        stroke="#ef4444"
+                        fill="url(#colorExpenses)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <p className="text-gray-500 mb-2">No transaction data available yet</p>
+                    <div className="flex gap-3">
+                      <Link to="/income">
+                        <Button className="bg-blue-500 hover:bg-blue-600 text-white">
+                          Add Income
+                        </Button>
+                      </Link>
+                      <Link to="/expenses">
+                        <Button className="bg-red-500 hover:bg-red-600 text-white">
+                          Add Expenses
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-            {/* Recent Changes */}
-            <div className="p-4 bg-white shadow-lg rounded-2xl">
-              <h2 className="text-lg font-bold">Recent Changes</h2>
-              <ul className="mt-2 text-sm">
-                <li>₱5,000 added from Salary</li>
-                <li>₱800 deducted for Grocery Shopping</li>
-                <li>₱150 deducted for Coffee</li>
-              </ul>
-            </div>
+          {/* Recent Transactions */}
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Recent Transactions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {recentTransactions.length > 0 ? (
+                    recentTransactions.map((transaction) => (
+                      <TableRow key={transaction.id || transaction._id}>
+                        <TableCell>{formatDate(transaction.date)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: transaction.color }}
+                            ></div>
+                            <span>{transaction.name || transaction.type}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>{transaction.description || `-`}</TableCell>
+                        <TableCell 
+                          className={`text-right ${
+                            transaction.transactionType === 'income' 
+                              ? 'text-green-600' 
+                              : 'text-red-600'
+                          }`}
+                        >
+                          {formatCurrency(Number(transaction.amount) || 0)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center text-gray-500">
+                        No recent transactions
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
 
-            {/* My Goals */}
-            <div className="p-4 bg-white shadow-lg rounded-2xl">
-              <h2 className="text-lg font-bold">My Goals</h2>
-              <ul className="mt-2 text-sm">
-                <li>Emergency Fund</li>
-                <li>Vacation: Siargao</li>
-              </ul>
-            </div>
-          </div>
+          {/* Financial Goals */}
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Financial Goals</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {goals && goals.length > 0 ? (
+                <div className="space-y-4">
+                  {goals.map((goal) => {
+                    // Determine the correct property names based on API response
+                    const targetAmount = typeof goal.target_amount !== 'undefined' 
+                      ? parseFloat(String(goal.target_amount)) 
+                      : parseFloat(String(goal.targetAmount)) || 0;
+                      
+                    const amountSaved = typeof goal.current_amount !== 'undefined' 
+                      ? parseFloat(String(goal.current_amount)) 
+                      : parseFloat(String(goal.amountSaved)) || 0;
+                    
+                    // Ensure we don't divide by zero and cap progress at 100%
+                    const progress = targetAmount > 0 
+                      ? Math.min(Math.round((amountSaved / targetAmount) * 100), 100) 
+                      : 0;
+                      
+                    // Get goal name from either property
+                    const name = goal.name || 'Unnamed Goal';
+                    
+                    // Get goal ID
+                    const id = goal._id || goal.id;
+                    
+                    // Get deadline date
+                    const deadline = goal.deadline || null;
+                    
+                    console.log(`Goal "${name}" progress calculation:`, {
+                      targetAmount,
+                      amountSaved,
+                      progress
+                    });
+                    
+                    return (
+                      <div key={id} className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-700">{name}</span>
+                          <span className="text-sm text-gray-500">
+                            {formatCurrency(amountSaved)} / {formatCurrency(targetAmount)}
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2.5">
+                          <div 
+                            className="bg-blue-600 h-2.5 rounded-full" 
+                            style={{ width: `${progress}%` }}
+                          ></div>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-500">
+                          <span>{progress}% complete</span>
+                          <span>
+                            {deadline ? formatDate(deadline) : 'No deadline'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-gray-500">
+                  <p>No financial goals set</p>
+                  <Link to="/financegoal">
+                    <Button className="mt-2 bg-indigo-500 hover:bg-indigo-600 text-white">
+                      Create a Goal
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </main>
       </div>
 

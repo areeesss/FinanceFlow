@@ -1,36 +1,107 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import image from "@/assets/imgs/halfbg.webp";
 import logo from "@/assets/imgs/Financelogo.webp";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, AlertCircle } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
+import { useToast } from "@/components/ui/use-toast";
 
-const LoginPage = () => {
+const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [signupToastShown, setSignupToastShown] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth(); // Get login function from AuthContext
+  const location = useLocation();
+  const { login, error: authError } = useAuth(); // Get login function and error from AuthContext
+  const { addToast } = useToast(); // Use toast hook for notifications
+  
+  // Show signup success message if navigated from signup
+  useEffect(() => {
+    // Check local storage to see if we've shown this message before
+    const hasShownSignupToast = localStorage.getItem('signupToastShown');
+    
+    if (location.state?.signupSuccess && !signupToastShown && !hasShownSignupToast) {
+      addToast({
+        title: "Registration Successful",
+        description: `Account created for ${location.state.email}. Please log in.${
+          location.state.defaultData 
+            ? ' Default financial data has been created for your account including income, expenses, budgets, and a goal.' 
+            : ''
+        }`,
+      });
+      
+      // Set both local state and localStorage flag to prevent showing the toast again
+      setSignupToastShown(true);
+      localStorage.setItem('signupToastShown', 'true');
+      
+      // Clear the flag after a reasonable time (e.g., 1 minute)
+      setTimeout(() => {
+        localStorage.removeItem('signupToastShown');
+      }, 60000);
+    }
+  }, [location.state, addToast, signupToastShown]);
+  
+  // Show auth errors using toast
+  useEffect(() => {
+    if (authError) {
+      addToast({
+        title: "Login Failed",
+        description: authError,
+        variant: "destructive",
+      });
+    }
+  }, [authError, addToast]);
 
   // Handle login function
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault(); // Prevent page reload
+    
+    // Basic validation
+    if (!email.trim() || !password.trim()) {
+      addToast({
+        title: "Error",
+        description: "Email and password are required",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setLoading(true);
     try {
       await login(email, password);
-      navigate("/dashboard");
     } catch (error) {
       console.error("Login error:", error);
-      alert("Invalid credentials! Please try again.");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle navigation to signup page
+  const handleNavigateToSignup = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigate("/signup");
+  };
+
+  // Handle navigation to forgot password page
+  const handleNavigateToForgotPassword = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigate("/forgot-password");
+  };
+
+  // Handle navigation to Gmail login
+  const handleNavigateToGmail = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigate("/gmail");
   };
 
   useEffect(() => {
@@ -82,13 +153,6 @@ const LoginPage = () => {
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <label className="text-black text-base">Password</label>
-                  <button
-                    type="button"
-                    className="text-[#2d346b] text-sm hover:underline"
-                    onClick={() => navigate("/forgot-password")}
-                  >
-                    Forgot your password?
-                  </button>
                 </div>
                 <div className="relative">
                   <Input
@@ -121,6 +185,16 @@ const LoginPage = () => {
                 {loading ? "Logging in..." : "Log In"}
               </Button>
             </form>
+            
+            {/* Password Reset Link - Outside the form */}
+            <div className="mt-2 text-right">
+              <span
+                className="text-[#2d346b] text-sm hover:underline cursor-pointer"
+                onClick={handleNavigateToForgotPassword}
+              >
+                Forgot your password?
+              </span>
+            </div>
 
             <div className="flex items-center my-4">
               <div className="flex-grow border-t border-gray-400"></div>
@@ -130,8 +204,9 @@ const LoginPage = () => {
 
             {/* Google Login Button */}
             <Button
+              type="button"
               className="w-full flex items-center justify-center h-[50px] bg-white border border-gray-300 text-black rounded-lg shadow-md hover:bg-gray-100"
-              onClick={() => navigate("/gmail")}
+              onClick={handleNavigateToGmail}
             >
               <FcGoogle className="w-6 h-6 mr-1" />
               Sign in with Google
@@ -141,9 +216,10 @@ const LoginPage = () => {
             <p className="text-center text-lg mt-3">
               <span className="text-[#2d346b]">Don't have an account? </span>
               <Button
+                type="button"
                 variant="link"
                 className="text-[#2d346b] p-0"
-                onClick={() => navigate("/signup")}
+                onClick={handleNavigateToSignup}
               >
                 Sign Up
               </Button>
@@ -164,4 +240,4 @@ const LoginPage = () => {
   );
 };
 
-export default LoginPage;
+export default Login;

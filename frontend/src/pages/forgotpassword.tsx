@@ -12,12 +12,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"; // Import Alert Dialog
+import { useToast } from "@/components/ui/use-toast";
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState(""); // State for email input
-  const [error, setError] = useState(""); // State for error message
   const [isDialogOpen, setIsDialogOpen] = useState(false); // State for alert dialog
+  const { addToast } = useToast();
 
   // Email validation function
   const validateEmail = (email: string) => {
@@ -28,15 +29,22 @@ const ForgotPassword = () => {
   // Handle form submission
   const handleSendCode = () => {
     if (!email.trim()) {
-      setError("Email is required.");
+      addToast({
+        title: "Error",
+        description: "Email is required.",
+        variant: "destructive",
+      });
       return;
     }
     if (!validateEmail(email)) {
-      setError("Invalid email address. Please enter a valid email.");
+      addToast({
+        title: "Error",
+        description: "Invalid email address. Please enter a valid email.",
+        variant: "destructive",
+      });
       return;
     }
 
-    setError(""); // Clear error if valid
     setIsDialogOpen(true); // Show alert dialog
   };
 
@@ -86,8 +94,6 @@ const ForgotPassword = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
-                {error && <p className="text-red-500 text-sm">{error}</p>}{" "}
-                {/* Error Message */}
               </div>
 
               {/* Send Code Button */}

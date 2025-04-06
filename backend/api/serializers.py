@@ -4,7 +4,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.models import update_last_login
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
-from .models import Category, Income, Expense, Savings, Budget, Goal
+from .models import Category, Income, Expense, Savings, Budget, BudgetItem, Goal
 
 User = get_user_model()
 
@@ -93,11 +93,53 @@ class SavingsSerializer(serializers.ModelSerializer):
         read_only_fields = ['user', 'total']
 
 
+class BudgetItemSerializer(serializers.ModelSerializer):
+    remaining = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    progress = serializers.FloatField(read_only=True)
+    
+    class Meta:
+        model = BudgetItem
+        fields = ['id', 'category', 'planned', 'actual', 'color', 'remaining', 'progress']
+
+
 class BudgetSerializer(serializers.ModelSerializer):
+    items = BudgetItemSerializer(many=True, read_only=False, required=False)
+    
     class Meta:
         model = Budget
-        fields = ['id', 'name', 'target_amount', 'current_amount', 'start_date', 'end_date', 'description', 'user']
+        fields = ['id', 'name', 'target_amount', 'current_amount', 'start_date', 'end_date', 'description', 'period', 'user', 'items']
         read_only_fields = ['user']
+    
+    def create(self, validated_data):
+        items_data = validated_data.pop('items', [])
+        budget = Budget.objects.create(**validated_data)
+        
+        for item_data in items_data:
+            BudgetItem.objects.create(budget=budget, **item_data)
+            
+        return budget
+    
+    def update(self, instance, validated_data):
+        items_data = validated_data.pop('items', [])
+        
+        # Update budget fields
+        instance.name = validated_data.get('name', instance.name)
+        instance.target_amount = validated_data.get('target_amount', instance.target_amount)
+        instance.current_amount = validated_data.get('current_amount', instance.current_amount)
+        instance.start_date = validated_data.get('start_date', instance.start_date)
+        instance.end_date = validated_data.get('end_date', instance.end_date)
+        instance.description = validated_data.get('description', instance.description)
+        instance.period = validated_data.get('period', instance.period)
+        instance.save()
+        
+        # Handle budget items - if we receive a list of items, replace existing ones
+        if items_data:
+            # Delete existing items and create new ones
+            instance.items.all().delete()
+            for item_data in items_data:
+                BudgetItem.objects.create(budget=instance, **item_data)
+        
+        return instance
 
 
 class GoalSerializer(serializers.ModelSerializer):
