@@ -15,21 +15,16 @@ import { useMutation } from "@tanstack/react-query";
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isPending, setIsPending] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
+  const [errorMessage] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const { login, clearError } = useAuth();
+  const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   
   // Check if the user came from the signup page with success state
   const signupSuccess = location.state?.signupSuccess || false;
-  const signupEmail = location.state?.email || "";
   const [toastShown, setToastShown] = useState(false);
   const { addToast } = useToast();
-  
-  // Get flag from localStorage to show signup toast only once
-  const hasShownSignupToast = localStorage.getItem('signupToastShown');
   
   // Clear localStorage data if not coming from signup page
   useEffect(() => {

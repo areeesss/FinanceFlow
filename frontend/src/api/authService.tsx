@@ -121,7 +121,7 @@ export const getCurrentUser = async (): Promise<User> => {
   try {
     const response = await apiClient.get('/user/');
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Failed to fetch user');
   }
 };
@@ -130,7 +130,7 @@ export const refreshToken = async (data: RefreshTokenData): Promise<{ access: st
   try {
     const response = await apiClient.post('/token/refresh/', data);
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Token refresh failed');
   }
 };
