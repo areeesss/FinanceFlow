@@ -1,19 +1,18 @@
+import { useAuth } from "@/context/AuthContext";
+import { Avatar } from "@/components/ui/avatar";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  BadgePlus,
+  ChevronLeft,
+  ChevronRight,
   Home,
   Wallet,
   Goal,
   List,
   CreditCard,
   Menu,
-  Settings,
-  Save,
   Plus,
-  MoreVertical,
-  Trash2,
-  Edit2,
 } from "lucide-react";
 import darkfont from "@/assets/imgs/darkfont.webp";
 import userimg from "@/assets/imgs/user.webp";
@@ -50,19 +49,18 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/common/LoadingSpinner";
-import { useAuth } from "@/context/AuthContext";
 import { formatCurrency } from "@/utils/format";
 import { useToast } from "@/components/ui/use-toast";
 import { Label } from "@/components/ui/label";
 import { useIncome } from "@/hooks";
 
 // Define types for the NavItem props
-  interface NavItemProps {
-    icon: React.ElementType;
-    label: string;
-    active?: boolean;
-    isSidebarOpen: boolean;
-  }
+interface NavItemProps {
+  icon: React.ElementType;
+  label: string;
+  active?: boolean;
+  isSidebarOpen: boolean;
+}
 
 // Define the NavItem component
 const NavItem: React.FC<NavItemProps> = ({
@@ -93,14 +91,14 @@ const NavItem: React.FC<NavItemProps> = ({
     </div>
   );
 
-  interface IncomeItem {
+interface IncomeItem {
   id: string;
-    type: string;
-    amount: number;
+  type: string;
+  amount: number;
   date: string;
-    fill: string;
-    color: string;
-  }
+  fill: string;
+  color: string;
+}
 
 // Define a StatCard component for editable income sources
 interface StatCardProps {
@@ -715,7 +713,7 @@ const Income = () => {
                     </Button>
                   </div>
                 </div>
-        </CardContent>
+              </CardContent>
             </Card>
           </div>
         )}

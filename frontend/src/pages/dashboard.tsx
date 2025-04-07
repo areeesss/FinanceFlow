@@ -52,7 +52,6 @@ import {
 import {
   CardHeader,
   CardTitle,
-  CardContent as UiCardContent,
 } from "@/components/ui/card";
 import {
   Table,
@@ -169,7 +168,6 @@ const Dashboard: React.FC = () => {
     isLoading: incomeLoading, 
     error: incomeError,
     totalIncome,
-    formatCurrency,
     refetch: refetchIncome
   } = useIncome();
 

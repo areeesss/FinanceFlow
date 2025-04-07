@@ -1,5 +1,4 @@
 import axios from 'axios';
-import apiClient from '../api/apiClient';
 
 // Update the API_URL to use an environment variable with a fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -104,22 +103,6 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-// Utility function to get user ID from local storage
-const getUserId = (): number | null => {
-  try {
-    const token = localStorage.getItem('access_token');
-    if (!token) return null;
-    
-    // For a JWT token, we could decode it to get user info
-    // However, for this implementation we'll rely on the backend to 
-    // associate the request with the authenticated user
-    return null; // Let the backend handle user association
-  } catch (error) {
-    console.error('Error getting user ID:', error);
-    return null;
-  }
-};
 
 // Default color utilities
 // Using colors from the color selector that mesh well together
