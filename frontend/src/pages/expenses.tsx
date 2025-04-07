@@ -1,3 +1,4 @@
+import { useAuth } from "@/context/AuthContext";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Link, useNavigate } from "react-router-dom";
@@ -50,7 +51,6 @@ import {
 } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/common/LoadingSpinner";
 import { useToast } from "@/components/ui/use-toast";
-import { useAuth } from "@/context/AuthContext";
 import { Label } from "@/components/ui/label";
 import { useExpenses } from "@/hooks";
 
