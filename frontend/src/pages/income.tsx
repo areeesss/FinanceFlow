@@ -13,6 +13,8 @@ import {
   CreditCard,
   Menu,
   Plus,
+  Settings,
+  Save
 } from "lucide-react";
 import darkfont from "@/assets/imgs/darkfont.webp";
 import userimg from "@/assets/imgs/user.webp";
@@ -49,10 +51,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/common/LoadingSpinner";
-import { formatCurrency } from "@/utils/format";
 import { useToast } from "@/components/ui/use-toast";
 import { Label } from "@/components/ui/label";
 import { useIncome } from "@/hooks";
+import { formatCurrency } from "@/lib/utils";
 
 // Define types for the NavItem props
 interface NavItemProps {
@@ -109,22 +111,6 @@ interface StatCardProps {
   date: string;
 }
 
-// Define a set of consistent colors for income sources
-const INCOME_COLORS = [
-  "#0000FF", // Dark blue (from image)
-  "#191970", // Navy blue (from image)
-  "#483D8B", // Medium blue (from image)
-  "#0000CD", // Lighter blue (from image)
-  "#4299E1", // Additional blues
-  "#3182CE",
-  "#667EEA",
-  "#38B2AC",
-  "#48BB78",
-  "#38A169",
-  "#9F7AEA",
-  "#D53F8C",
-];
-
 // Add color options array near the top of the file with the other constants
 const COLOR_OPTIONS = [
   // Row 1
@@ -138,22 +124,21 @@ const COLOR_OPTIONS = [
 ];
 
 const Income = () => {
-  const { addToast } = useToast();
-  const { user } = useAuth();
   const navigate = useNavigate();
-
-  // Use our custom income hook instead of direct TanStack Query
-  const {
-    income: incomeItems,
+  const { user, loading: authLoading, logout } = useAuth();
+  const { addToast } = useToast();
+  
+  // Use our custom income hook with all required functions
+  const { 
+    income, 
     isLoading,
     error,
     totalIncome,
-    formatCurrency,
     createIncome,
     updateIncome,
     deleteIncome,
-    mutations,
-    getChartData
+    refetch,
+    formatCurrency
   } = useIncome();
 
   // Transform incomeItems to match the IncomeItem interface
@@ -186,10 +171,10 @@ const Income = () => {
 
   // Process income data from the custom hook
   useEffect(() => {
-    if (incomeItems && Array.isArray(incomeItems)) {
-      console.log("Income data from hook:", incomeItems);
+    if (income && Array.isArray(income)) {
+      console.log("Income data from hook:", income);
       
-      setIncomeData(incomeItems.map(item => ({
+      setIncomeData(income.map(item => ({
         id: item.id,
         type: item.source, // Map source to type
         amount: item.amount, 
@@ -198,7 +183,7 @@ const Income = () => {
         color: item.color
       })));
     }
-  }, [incomeItems]);
+  }, [income]);
 
   // Save colors to localStorage when they change
   useEffect(() => {
@@ -252,7 +237,7 @@ const Income = () => {
       return (
         <div className="bg-white p-2 border rounded shadow">
           <p className="font-medium">{payload[0].name}</p>
-          <p className="text-gray-600">{formatCurrency(value)}</p>
+          <p className="text-gray-600">{value}</p>
           <p className="text-gray-600">{percent}% of income</p>
         </div>
       );
@@ -379,7 +364,23 @@ const Income = () => {
       };
       
       console.log("Creating new income source with color:", newIncome.color);
-      await createIncome(newSource);
+      const response = await createIncome(newSource);
+      
+      // When creating a new source, we need to wait for the response to get the ID
+      if (response && response.data && response.data.id) {
+        // Save color to localStorage
+        try {
+          const colorMap: Record<string, string> = JSON.parse(localStorage.getItem('incomeColors') || '{}');
+          colorMap[String(response.data.id)] = newIncome.color;
+          localStorage.setItem('incomeColors', JSON.stringify(colorMap));
+          console.log("Saved new income source color to localStorage:", {
+            id: response.data.id,
+            color: newIncome.color
+          });
+        } catch (e) {
+          console.error("Failed to save color to localStorage:", e);
+        }
+      }
     } catch (error) {
       // Error is handled by the mutation
     }
@@ -672,7 +673,7 @@ const Income = () => {
                 {formatDate(date)}
               </p>
               <p className="text-lg md:text-xl font-bold text-white">
-                {formatCurrency(amount)}
+                {amount}
               </p>
             </div>
           )}
@@ -1227,7 +1228,7 @@ const Income = () => {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right text-green-600 font-medium">
-                          {formatCurrency(income.amount)}
+                          {income.amount}
                         </td>
                       </tr>
                     ))
