@@ -15,14 +15,14 @@ import {
   Settings,
   Save,
 } from "lucide-react";
-import darkfont from "@/assets/imgs/darkfont.webp";
+import darkfont from "/assets/imgs/darkfont.webp";
 import { Switch } from "@/components/ui/switch";
-import userimg from "@/assets/imgs/user.webp";
+import userimg from "/assets/imgs/user.webp";
 import { Separator } from "@/components/ui/separator";
-import halfbg from "@/assets/imgs/halfbg.webp";
-import art from "@/assets/imgs/heart.webp";
-import vin from "@/assets/imgs/vin.webp";
-import gil from "@/assets/imgs/jil.webp";
+import halfbg from "/assets/imgs/halfbg.webp";
+import art from "/assets/imgs/heart.webp";
+import vin from "/assets/imgs/vin.webp";
+import gil from "/assets/imgs/jil.webp";
 import {
   AlertDialog,
   AlertDialogContent,

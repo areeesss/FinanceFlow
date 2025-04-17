@@ -28,9 +28,9 @@ import {
   Trash2,
   Minus,
 } from "lucide-react";
-import darkfont from "@/assets/imgs/darkfont.webp";
+import darkfont from "/assets/imgs/darkfont.webp";
 import { Switch } from "@/components/ui/switch";
-import userimg from "@/assets/imgs/user.webp";
+import userimg from "/assets/imgs/user.webp";
 import {
   AlertDialog,
   AlertDialogContent,
