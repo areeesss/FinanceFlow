@@ -13,8 +13,8 @@ import {
   Save,
   Plus,
 } from "lucide-react";
-import darkfont from "@/assets/imgs/darkfont.webp";
-import userimg from "@/assets/imgs/user.webp";
+import darkfont from "/assets/imgs/darkfont.webp";
+import userimg from "/assets/imgs/user.webp";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import {
