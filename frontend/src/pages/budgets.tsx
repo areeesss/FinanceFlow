@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   Table,
   TableBody,
@@ -95,7 +95,8 @@ interface BudgetItem {
   progress: number;
 }
 
-interface Budget {
+// Export the Budget type so it can be used elsewhere
+export type Budget = {
   id: number;
   name: string;
   period: "daily" | "weekly" | "monthly";
@@ -105,92 +106,6 @@ interface Budget {
   startDate?: string;
   endDate?: string;
 }
-
-// Process API response to handle different formats
-const processApiResponse = <T extends unknown>(response: any): T[] => {
-  if (!response || response.data === undefined) return [];
-
-  // Handle different response formats
-  if (Array.isArray(response.data)) {
-    return response.data as T[];
-  } 
-  
-  if (response.data.results && Array.isArray(response.data.results)) {
-    return response.data.results as T[];
-  } 
-  
-  if (typeof response.data === 'object' && response.data !== null) {
-    // Handle single item
-    if (response.data.id || response.data._id) {
-      return [response.data] as T[];
-    }
-    
-    // Handle nested data
-    const dataKeys = ['income', 'expenses', 'goals', 'budgets'];
-    for (const key of dataKeys) {
-      if (response.data[key] && Array.isArray(response.data[key])) {
-        return response.data[key] as T[];
-      }
-    }
-    
-    // Handle object of objects case
-    const potentialItems = Object.values(response.data).filter(
-      item => typeof item === 'object' && item !== null
-    );
-    
-    if (potentialItems.length > 0) {
-      return potentialItems as T[];
-    }
-  }
-  
-  // Return empty array as fallback
-  return [];
-};
-
-// Map backend budget format to frontend format
-const mapBackendToFrontend = (backendBudget: any): Budget => {
-  // Default period based on date range or use the one from backend
-  let period: "daily" | "weekly" | "monthly" = backendBudget.period || "monthly";
-  
-  // Determine period based on date range if not specified in backend
-  if (!backendBudget.period && backendBudget.start_date && backendBudget.end_date) {
-    const startDate = new Date(backendBudget.start_date);
-    const endDate = new Date(backendBudget.end_date);
-    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    
-    if (daysDiff <= 1) {
-      period = "daily";
-    } else if (daysDiff <= 7) {
-      period = "weekly";
-    } else {
-      period = "monthly";
-    }
-  }
-  
-  // Use items from backend if available
-  let items: BudgetItem[] = [];
-  if (backendBudget.items && Array.isArray(backendBudget.items)) {
-    items = backendBudget.items.map((item: any) => ({
-      id: item.id,
-      category: item.category,
-      planned: Number(item.planned) || 0,
-      actual: Number(item.actual) || 0,
-      remaining: Number(item.remaining) || 0,
-      progress: Number(item.progress) || 0,
-    }));
-  }
-  
-  return {
-    id: backendBudget.id,
-    name: backendBudget.name,
-    period,
-    items,
-    totalPlanned: Number(backendBudget.target_amount) || 0,
-    totalActual: Number(backendBudget.current_amount) || 0,
-    startDate: backendBudget.start_date,
-    endDate: backendBudget.end_date,
-  };
-};
 
 // Type for NavItem props
 interface NavItemProps {
@@ -242,7 +157,6 @@ const BudgetPage = () => {
   
   // Use our custom useBudgets hook
   const {
-    budgets,
     filteredBudgets,
     currentBudget,
     currentBudgetId,
@@ -251,14 +165,12 @@ const BudgetPage = () => {
     setActivePeriod,
     isLoading,
     error,
-    refetch,
     currentStatus,
     createBudget,
     addBudgetItem,
     deleteBudgetItem,
     deleteBudget,
     updateCategorySpending,
-    getBudgetStatus,
     prepareChartData,
     preparePieChartData,
     mutations
@@ -274,8 +186,7 @@ const BudgetPage = () => {
   const [budgetToDelete, setBudgetToDelete] = useState<number | null>(null);
   const [deleteBudgetAlertOpen, setDeleteBudgetAlertOpen] = useState(false);
   const [activeChartView] = useState("bar");
-  const currencySymbol = "₱";
-  
+
   // State for user profile
   const [openPopover, setOpenPopover] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
