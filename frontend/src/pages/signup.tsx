@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import image from "@/assets/imgs/halfbg.webp";
-import logo from "@/assets/imgs/Financelogo.webp";
+import image from "/assets/imgs/halfbg.webp";
+import logo from "/assets/imgs/Financelogo.webp";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
