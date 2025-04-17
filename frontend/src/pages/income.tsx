@@ -3,9 +3,6 @@ import { Avatar } from "@/components/ui/avatar";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  BadgePlus,
-  ChevronLeft,
-  ChevronRight,
   Home,
   Wallet,
   Goal,
@@ -54,15 +51,14 @@ import { LoadingSpinner } from "@/components/common/LoadingSpinner";
 import { useToast } from "@/components/ui/use-toast";
 import { Label } from "@/components/ui/label";
 import { useIncome } from "@/hooks";
-import { formatCurrency } from "@/lib/utils";
 
 // Define types for the NavItem props
-interface NavItemProps {
-  icon: React.ElementType;
-  label: string;
-  active?: boolean;
-  isSidebarOpen: boolean;
-}
+  interface NavItemProps {
+    icon: React.ElementType;
+    label: string;
+    active?: boolean;
+    isSidebarOpen: boolean;
+  }
 
 // Define the NavItem component
 const NavItem: React.FC<NavItemProps> = ({
@@ -93,14 +89,14 @@ const NavItem: React.FC<NavItemProps> = ({
     </div>
   );
 
-interface IncomeItem {
+  interface IncomeItem {
   id: string;
-  type: string;
-  amount: number;
+    type: string;
+    amount: number;
   date: string;
-  fill: string;
-  color: string;
-}
+    fill: string;
+    color: string;
+  }
 
 // Define a StatCard component for editable income sources
 interface StatCardProps {
@@ -125,7 +121,7 @@ const COLOR_OPTIONS = [
 
 const Income = () => {
   const navigate = useNavigate();
-  const { user, loading: authLoading, logout } = useAuth();
+  const { user } = useAuth();
   const { addToast } = useToast();
   
   // Use our custom income hook with all required functions
@@ -137,7 +133,6 @@ const Income = () => {
     createIncome,
     updateIncome,
     deleteIncome,
-    refetch,
     formatCurrency
   } = useIncome();
 
@@ -237,7 +232,7 @@ const Income = () => {
       return (
         <div className="bg-white p-2 border rounded shadow">
           <p className="font-medium">{payload[0].name}</p>
-          <p className="text-gray-600">{value}</p>
+          <p className="text-gray-600">{formatCurrency(value)}</p>
           <p className="text-gray-600">{percent}% of income</p>
         </div>
       );
@@ -255,78 +250,6 @@ const Income = () => {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
-
-  const addIncomeSource = () => {
-    setNewIncome({
-      type: "",
-      amount: "100",
-      color: "#0000FF" // Default blue color from image
-    });
-    setIsDialogOpen(true);
-  };
-
-  const quickAddIncomeSource = async () => {
-    // Validate input
-    if (!newIncome.type) {
-      addToast({
-        title: "Error",
-        description: "Please enter a name for the income source",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const amount = parseFloat(newIncome.amount);
-    if (isNaN(amount) || amount <= 0) {
-      addToast({
-        title: "Error",
-        description: "Please enter a valid amount",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      // Prepare the new income source with correct property names
-      const newSource = {
-        source: newIncome.type, // Use source instead of type
-        amount: amount,
-        description: `Income from ${newIncome.type}`,
-        color: newIncome.color
-      };
-      
-      console.log("Creating new income source with color:", newIncome.color);
-      const response = await createIncome(newSource);
-      
-      // When creating a new source, we need to wait for the response to get the ID
-      if (response && response.data && response.data.id) {
-        // Save color to localStorage
-        try {
-          const colorMap: Record<string, string> = JSON.parse(localStorage.getItem('incomeColors') || '{}');
-          colorMap[String(response.data.id)] = newIncome.color;
-          localStorage.setItem('incomeColors', JSON.stringify(colorMap));
-          console.log("Saved new income source color to localStorage:", {
-            id: response.data.id,
-            color: newIncome.color
-          });
-        } catch (e) {
-          console.error("Failed to save color to localStorage:", e);
-        }
-      }
-    } catch (error) {
-      // Error is handled by the mutation
-    }
-  };
-
-  const handleEdit = (item: IncomeItem) => {
-    setSelectedIncome(item);
-    setEditIncome({
-      type: item.type,
-      amount: item.amount.toString(),
-      color: item.color
-    });
-    setIsEditing(true);
-  };
 
   const handleDelete = (item: IncomeItem) => {
     setSelectedIncome(item);
@@ -673,7 +596,7 @@ const Income = () => {
                 {formatDate(date)}
               </p>
               <p className="text-lg md:text-xl font-bold text-white">
-                {amount}
+                {formatCurrency(amount)}
               </p>
             </div>
           )}
@@ -801,9 +724,6 @@ const Income = () => {
       return "Invalid Date";
     }
   };
-
-  // Use memo to ensure stable ID value
-  const memoizedCardId = (id: string) => useMemo(() => id, [id]);
 
   return (
     <div className="flex h-screen bg-indigo-100 overflow-hidden">
@@ -1228,7 +1148,7 @@ const Income = () => {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-right text-green-600 font-medium">
-                          {income.amount}
+                          {formatCurrency(income.amount)}
                         </td>
                       </tr>
                     ))

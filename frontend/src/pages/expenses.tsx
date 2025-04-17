@@ -1,5 +1,5 @@
 import { useAuth } from "@/context/AuthContext";
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -12,8 +12,6 @@ import {
   Settings,
   Save,
   Plus,
-  Edit2,
-  Trash2,
 } from "lucide-react";
 import darkfont from "@/assets/imgs/darkfont.webp";
 import userimg from "@/assets/imgs/user.webp";
@@ -54,22 +52,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { Label } from "@/components/ui/label";
 import { useExpenses } from "@/hooks";
 
-// Define a set of consistent colors for expense sources
-const EXPENSE_COLORS = [
-  "#FF0000", // Red (from image)
-  "#DC143C", // Crimson red (from image)
-  "#B22222", // Fire brick red (from image)
-  "#8B0000", // Dark red (from image)
-  "#F56565", // Additional reds
-  "#E53E3E",
-  "#C53030",
-  "#9B2C2C",
-  "#742A2A",
-  "#ED8936", // Orange
-  "#DD6B20", // Dark Orange
-  "#9F7AEA", // Purple
-];
-
 // Add color options array near the top of the file with the other constants
 const COLOR_OPTIONS = [
   // Row 1
@@ -98,25 +80,6 @@ interface ExpenseItem {
   date?: string;
   fill: string;
   color: string;
-}
-
-// Define types for chart data
-interface ChartItem {
-  name: string;
-  value: number;
-  fill: string;
-}
-
-// Define types for chart config
-interface ChartConfig {
-  value: {
-    label: string;
-    color: string; // Added color property to match the index signature
-  };
-  [key: string]: {
-    label: string;
-    color: string;
-  };
 }
 
 // Define types for StatCard props
@@ -153,7 +116,6 @@ const Expenses = () => {
     createExpense,
     updateExpense,
     deleteExpense,
-    getChartData
   } = useExpenses();
 
   // Transform expenses to match the ExpenseItem interface
@@ -174,8 +136,6 @@ const Expenses = () => {
     amount: "100",
     color: "#FF0000" // Default red color from image
   });
-  const [selectedExpense, setSelectedExpense] = useState<ExpenseItem | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   
   // Add ref for scroll container
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -228,20 +188,6 @@ const Expenses = () => {
       });
     }
   };
-
-  // Prepare chart data with better filtering using useMemo
-  const chartData = useMemo(() => {
-    const chartItems = expenseData
-      .filter(item => Number(item.amount) > 0) 
-      .map(item => ({
-        name: item.type || 'Unnamed',
-        value: Number(item.amount),
-        fill: item.color,
-      }));
-    
-    console.log("Chart data with colors:", chartItems);
-    return chartItems;
-  }, [expenseData]);
 
   // Function to check if the device is mobile
   useEffect(() => {
@@ -461,8 +407,6 @@ const Expenses = () => {
       }
       
       await deleteExpense(id);
-      setDeleteDialogOpen(false);
-      
     } catch (error) {
       console.error("Error deleting expense:", error);
       addToast({

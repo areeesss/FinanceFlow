@@ -62,7 +62,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
 // Import our custom hooks
 import { useIncome, useExpenses, useGoals } from "@/hooks";
 
@@ -71,41 +70,6 @@ interface ChartData {
   day: string;
   income: number;
   expenses: number;
-}
-
-// Income interface
-interface Income {
-  id: string;
-  name: string;
-  type: string;
-  amount: number;
-  date: string;
-  description?: string;
-  color?: string;
-}
-
-// Expense interface
-interface Expense {
-  id: string;
-  name: string;
-  type: string;
-  amount: number;
-  date: string;
-  description?: string;
-  color?: string;
-}
-
-// Goal interface
-interface Goal {
-  id: string;
-  name: string;
-  targetAmount?: number;
-  target_amount?: number;
-  amountSaved?: number;
-  current_amount?: number;
-  deadline?: string;
-  description?: string;
-  color?: string;
 }
 
 // Define prop types for the NavItem component
@@ -147,7 +111,6 @@ const NavItem: React.FC<NavItemProps> = ({
 const Dashboard: React.FC = () => {
   const { user, loading: authLoading, logout } = useAuth();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [isDialogOpen, setIsDialogOpen] = useState<boolean>(false);
   const [isMobile, setIsMobile] = useState<boolean>(false);
@@ -167,23 +130,20 @@ const Dashboard: React.FC = () => {
     income: incomeData, 
     isLoading: incomeLoading, 
     error: incomeError,
-    totalIncome,
-    refetch: refetchIncome
+    totalIncome
   } = useIncome();
 
   const {
     expenses: expensesData,
     isLoading: expensesLoading,
     error: expensesError,
-    totalExpenses,
-    refetch: refetchExpenses
+    totalExpenses
   } = useExpenses();
 
   const {
     goals: goalsData,
     isLoading: goalsLoading,
-    error: goalsError,
-    refetch: refetchGoals
+    error: goalsError
   } = useGoals();
 
   // Loading state from all hooks
@@ -191,24 +151,6 @@ const Dashboard: React.FC = () => {
   
   // Combined error from all hooks
   const error = incomeError || expensesError || goalsError;
-
-  // Refresh data function for manual refreshes
-  const refreshData = async () => {
-    try {
-      await refetchIncome();
-      await refetchExpenses();
-      await refetchGoals();
-    } catch (err) {
-      console.error("Error refreshing data:", err);
-    }
-  };
-
-  // Calculate total savings from goals
-  const totalSavings = useMemo(() => {
-    return Array.isArray(goalsData) 
-      ? goalsData.reduce((sum, goal) => sum + (goal.amountSaved || 0), 0)
-      : 0;
-  }, [goalsData]);
     
   const netIncome = totalIncome - totalExpenses;
 

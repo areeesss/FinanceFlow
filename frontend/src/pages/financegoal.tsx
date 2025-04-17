@@ -12,7 +12,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  CardDescription,
 } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import {
