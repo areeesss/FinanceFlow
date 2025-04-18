@@ -1,11 +1,11 @@
 import axios from 'axios';
 
 // Update the API_URL to use an environment variable with a fallback
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // Create axios instance with default config
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: `${API_URL}/api`,  // Add /api prefix to match backend URL structure
   headers: {
     'Content-Type': 'application/json',
   },
@@ -66,7 +66,7 @@ api.interceptors.response.use(
         }
 
         // Make a direct axios call to avoid the interceptor loop
-        const response = await axios.post(`${API_URL}/token/refresh/`, {
+        const response = await axios.post(`${API_URL}/api/token/refresh/`, {
           refresh: refreshToken
         });
         
