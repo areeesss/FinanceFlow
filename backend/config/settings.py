@@ -114,8 +114,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://finance-flow-vercel.vercel.app",  # Add your Vercel domain
-    "https://financeflow.yourdomain.com",      # Add your custom domain if you have one
     "https://financeflow-cgn.vercel.app",      # Your current Vercel domain
 ]
 
