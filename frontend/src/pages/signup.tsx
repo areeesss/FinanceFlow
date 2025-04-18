@@ -10,6 +10,7 @@ import { Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/components/ui/use-toast";
 import { useMutation } from "@tanstack/react-query";
+import { debugAPI } from "@/services/api";
 
 const SignUpPage = () => {
   const navigate = useNavigate();
@@ -25,6 +26,9 @@ const SignUpPage = () => {
   // Simplified error state to only track password match since other errors use toast notifications
   const [passwordsMatch, setPasswordsMatch] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Add debug state
+  const [debugResult, setDebugResult] = useState<string | null>(null);
 
   // Registration mutation
   const registerMutation = useMutation({
@@ -68,6 +72,34 @@ const SignUpPage = () => {
       setPasswordsMatch(true); // Don't show error if fields are empty
     }
   }, [formData.password, formData.password2]);
+
+  // Add a debug function
+  const testApiConnection = async () => {
+    addToast({
+      title: "Testing API Connection",
+      description: "Checking connection to API...",
+    });
+    
+    try {
+      const result = await debugAPI();
+      console.log("Debug API result:", result);
+      
+      setDebugResult(JSON.stringify(result, null, 2));
+      
+      addToast({
+        title: "API Test Complete",
+        description: `API ${result.ok ? 'is accessible' : 'returned an error'}. See console for details.`,
+        variant: result.ok ? "default" : "destructive"
+      });
+    } catch (error) {
+      console.error("API test error:", error);
+      addToast({
+        title: "API Test Failed",
+        description: "Could not connect to API. See console for details.",
+        variant: "destructive"
+      });
+    }
+  };
 
   const validateForm = () => {
     // Validate full name
@@ -151,6 +183,24 @@ const SignUpPage = () => {
                 CREATE ACCOUNT
               </h1>
             </div>
+
+            {/* Debug button - only in development */}
+            {import.meta.env.DEV && (
+              <Button 
+                onClick={testApiConnection}
+                variant="outline" 
+                className="mb-4 w-full bg-amber-200 hover:bg-amber-300 text-black"
+              >
+                Test API Connection
+              </Button>
+            )}
+
+            {/* Debug result display */}
+            {debugResult && (
+              <div className="mb-4 p-2 bg-gray-100 border border-gray-300 rounded-md overflow-auto max-h-32 text-xs">
+                <pre>{debugResult}</pre>
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Full Name Input */}

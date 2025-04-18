@@ -1,9 +1,8 @@
 {
   "rewrites": [
+    { "source": "/assets/(.*)", "destination": "/assets/$1" },
+    { "source": "/(.*).(js|css|svg|jpg|jpeg|png|gif|ico|json|webp|woff|woff2|ttf|eot)", "destination": "/$1.$2" },
     { "source": "/(.*)", "destination": "/index.html" }
-  ],
-  "routes": [
-    { "src": "/[^.]+", "dest": "/", "status": 200 }
   ],
   "headers": [
     {
