@@ -3,7 +3,10 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "routes": [
-    { "src": "/[^.]+", "dest": "/", "status": 200 }
+    { "handle": "filesystem" },
+    { "src": "/assets/(.*)", "dest": "/assets/$1" },
+    { "src": "/(.*).(js|css|svg|jpg|jpeg|png|gif|ico|json|webp|woff|woff2|ttf|eot)", "dest": "/$1.$2" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ],
   "headers": [
     {

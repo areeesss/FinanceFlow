@@ -2,6 +2,7 @@ import axios from 'axios';
 
 // Update the API_URL to use an environment variable with a fallback
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+console.log("API URL being used:", API_URL); // Debug log to see what URL is actually being used
 
 // Create axios instance with default config
 const api = axios.create({
@@ -494,6 +495,40 @@ export const testAPI = {
       }
       return null;
     }
+  }
+};
+
+// Debug function to test API connection
+export const debugAPI = async () => {
+  try {
+    console.log("Debugging API connection...");
+    console.log("API_URL:", API_URL);
+    console.log("baseURL:", `${API_URL}/api`);
+    
+    // Try a direct fetch to avoid any interceptors
+    const response = await fetch(`${API_URL}/api/register/`);
+    console.log("Direct fetch status:", response.status);
+    console.log("Direct fetch headers:", response.headers);
+    console.log("Direct fetch ok:", response.ok);
+    
+    try {
+      const data = await response.text();
+      console.log("Response text:", data);
+    } catch (e) {
+      console.log("Could not parse response text:", e);
+    }
+    
+    return {
+      url: `${API_URL}/api/register/`,
+      status: response.status,
+      ok: response.ok
+    };
+  } catch (error) {
+    console.error("API connection test failed:", error);
+    return {
+      error: true,
+      message: error instanceof Error ? error.message : String(error)
+    };
   }
 };
 
