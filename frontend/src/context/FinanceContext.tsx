@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { incomeService, expenseService, goalService, budgetService } from '@/services/api';
+import { incomeService } from '@/services/incomeApi';
+import { expenseService } from '@/services/expenseApi';
+import { goalService } from '@/services/goalApi';
+import { budgetService } from '@/services/budgetApi';
 import { useAuth } from '@/context/AuthContext';
 
 // Define types for the financial data
