@@ -297,12 +297,22 @@ const BudgetPage = () => {
       });
       return;
     }
+
+    const plannedAmount = parseFloat(newItemPlanned);
+    if (isNaN(plannedAmount) || plannedAmount < 0) {
+      addToast({
+        title: "Error",
+        description: "Please enter a valid positive amount",
+        variant: "destructive",
+      });
+      return;
+    }
     
     try {
       // Create the budget item data
       const itemData = {
         category: newItemCategory,
-        planned: parseFloat(newItemPlanned)
+        planned: plannedAmount
       };
       
       // Call the hook function
@@ -697,32 +707,28 @@ const BudgetPage = () => {
           </AlertDialog>
           {/* Budget Type Tabs */}
           <div className="flex justify-between items-center mb-6">
-            <Tabs
-              defaultValue={activePeriod}
-              value={activePeriod}
-              onValueChange={handlePeriodChange}
-              className="w-full"
-            >
-              <TabsList className="w-full max-w-md mb-2">
-                <TabsTrigger value="daily" className="flex-1">
-                  <Clock className="w-4 h-4 mr-2" />
-                  Daily
-                </TabsTrigger>
-                <TabsTrigger value="weekly" className="flex-1">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Weekly
-                </TabsTrigger>
-                <TabsTrigger value="monthly" className="flex-1">
-                  <BarChart className="w-4 h-4 mr-2" />
-                  Monthly
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-          {/* Budget Selection */}
-          {filteredBudgets.length > 0 ? (
-            <div className="mb-6 flex flex-col gap-2">
-              <Label htmlFor="budgetSelect">Select Budget: </Label>
+            <div className="flex items-center gap-4 w-full">
+              <Tabs
+                defaultValue={activePeriod}
+                value={activePeriod}
+                onValueChange={handlePeriodChange}
+                className="flex-1"
+              >
+                <TabsList className="w-full max-w-md mb-2">
+                  <TabsTrigger value="daily" className="flex-1">
+                    <Clock className="w-4 h-4 mr-2" />
+                    Daily
+                  </TabsTrigger>
+                  <TabsTrigger value="weekly" className="flex-1">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Weekly
+                  </TabsTrigger>
+                  <TabsTrigger value="monthly" className="flex-1">
+                    <BarChart className="w-4 h-4 mr-2" />
+                    Monthly
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
               <Button
                 onClick={() => {
                   // Pre-set the period based on the active tab
@@ -748,7 +754,7 @@ const BudgetPage = () => {
                   setNewBudgetEndDate(endDate.toISOString().split('T')[0]);
                   setNewBudgetDialogOpen(true);
                 }}
-                className="bg-indigo-500 hover:bg-indigo-600 text-white w-fit"
+                className="bg-indigo-500 hover:bg-indigo-600 text-white whitespace-nowrap"
                 disabled={mutations.create.isPending}
               >
                 {mutations.create.isPending ? (
@@ -761,6 +767,12 @@ const BudgetPage = () => {
                   </>
                 )}
               </Button>
+            </div>
+          </div>
+          {/* Budget Selection */}
+          {filteredBudgets.length > 0 ? (
+            <div className="mb-6 flex flex-col gap-2">
+              <Label htmlFor="budgetSelect">Select Budget: </Label>
               <div className="flex gap-4 mt-2 flex-wrap">
                 {filteredBudgets.map((budget) => (
                   <Card
@@ -1253,9 +1265,16 @@ const BudgetPage = () => {
               <Input
                 id="item-planned"
                 type="number"
+                min="0"
+                step="0.01"
                 placeholder="Enter amount"
                 value={newItemPlanned}
-                onChange={(e) => setNewItemPlanned(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || parseFloat(value) >= 0) {
+                    setNewItemPlanned(value);
+                  }
+                }}
               />
             </div>
           </div>

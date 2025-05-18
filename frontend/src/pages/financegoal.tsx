@@ -458,17 +458,17 @@ const FinanceGoal = () => {
     if (!newGoalName || !newGoalAmount || !newGoalDeadline) {
       addToast({
         title: "Error",
-        description: "Please fill in all fields",
+        description: "Please fill in all required fields",
         variant: "destructive",
       });
       return;
     }
 
-    const targetAmount = parseFloat(newGoalAmount);
-    if (isNaN(targetAmount) || targetAmount <= 0) {
+    const amount = parseFloat(newGoalAmount);
+    if (isNaN(amount) || amount <= 0) {
       addToast({
         title: "Error",
-        description: "Please enter a valid target amount",
+        description: "Please enter a valid positive target amount",
         variant: "destructive",
       });
       return;
@@ -477,7 +477,7 @@ const FinanceGoal = () => {
     // Format the data to match what the backend expects (field names match Django model)
     const formattedGoal = {
       name: newGoalName,
-      target_amount: targetAmount,
+      target_amount: amount,
       current_amount: 0, // Default to 0 for new goal
       deadline: newGoalDeadline,
       description: `Goal for ${newGoalName}`
@@ -503,11 +503,11 @@ const FinanceGoal = () => {
       return;
     }
 
-    const targetAmount = parseFloat(newGoalAmount);
-    if (isNaN(targetAmount) || targetAmount <= 0) {
+    const amount = parseFloat(newGoalAmount);
+    if (isNaN(amount) || amount <= 0) {
       addToast({
         title: "Error",
-        description: "Please enter a valid target amount",
+        description: "Please enter a valid positive target amount",
         variant: "destructive",
       });
       return;
@@ -526,7 +526,7 @@ const FinanceGoal = () => {
     // Format the data to match what the backend expects (field names match Django model)
     const updatedGoal = {
       name: newGoalName,
-      target_amount: targetAmount,
+      target_amount: amount,
       current_amount: amountSaved,
       deadline: newGoalDeadline,
       description: `Goal for ${newGoalName}`
@@ -1067,9 +1067,16 @@ const FinanceGoal = () => {
                   <Input
                     id="targetAmount"
                     type="number"
+                    min="0"
+                    step="0.01"
                     placeholder="5000"
                     value={newGoalAmount}
-                    onChange={(e) => setNewGoalAmount(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || parseFloat(value) >= 0) {
+                        setNewGoalAmount(value);
+                      }
+                    }}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -1087,7 +1094,7 @@ const FinanceGoal = () => {
                   Cancel
                 </Button>
                 <Button
-                  className="bg-indigo-900 hover:bg-indigo-700 text-white"
+                  className="mt-2 bg-indigo-500 hover:bg-indigo-600 text-white"
                   onClick={handleAddGoal}
                 >
                   Create Goal
@@ -1119,8 +1126,15 @@ const FinanceGoal = () => {
                   <Input
                     id="editTargetAmount"
                     type="number"
+                    min="0"
+                    step="0.01"
                     value={newGoalAmount}
-                    onChange={(e) => setNewGoalAmount(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || parseFloat(value) >= 0) {
+                        setNewGoalAmount(value);
+                      }
+                    }}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -1128,8 +1142,15 @@ const FinanceGoal = () => {
                   <Input
                     id="editSavedAmount"
                     type="number"
+                    min="0"
+                    step="0.01"
                     value={newSavedAmount}
-                    onChange={(e) => setNewSavedAmount(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || parseFloat(value) >= 0) {
+                        setNewSavedAmount(value);
+                      }
+                    }}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -1245,9 +1266,16 @@ const FinanceGoal = () => {
                   <Input
                     id="fundsAmount"
                     type="number"
+                    min="0"
+                    step="0.01"
                     placeholder="500"
                     value={fundsToAdd}
-                    onChange={(e) => setFundsToAdd(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || parseFloat(value) >= 0) {
+                        setFundsToAdd(value);
+                      }
+                    }}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -1347,9 +1375,16 @@ const FinanceGoal = () => {
                   <Input
                     id="withdrawAmount"
                     type="number"
+                    min="0"
+                    step="0.01"
                     placeholder="500"
                     value={fundsToWithdraw}
-                    onChange={(e) => setFundsToWithdraw(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || parseFloat(value) >= 0) {
+                        setFundsToWithdraw(value);
+                      }
+                    }}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -1434,9 +1469,16 @@ const FinanceGoal = () => {
                   <Input
                     id="transferAmount"
                     type="number"
+                    min="0"
+                    step="0.01"
                     placeholder="500"
                     value={fundsToTransfer}
-                    onChange={(e) => setFundsToTransfer(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || parseFloat(value) >= 0) {
+                        setFundsToTransfer(value);
+                      }
+                    }}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -1566,7 +1608,7 @@ const FinanceGoal = () => {
                 <div className="text-center py-8">
                   <p>No goals found. Create your first financial goal!</p>
                   <Button
-                    className="mt-2 bg-indigo-900 hover:bg-indigo-700"
+                    className="mt-2 bg-indigo-500 hover:bg-indigo-600"
                     onClick={openAddGoalDialog}
                   >
                     <Plus className="w-4 h-4 mr-2" /> Create Goal
