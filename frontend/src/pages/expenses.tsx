@@ -250,26 +250,27 @@ const Expenses = () => {
 
   // Function to add a new expense
   const addExpenseSource = async () => {
-    if (!newExpense.type || !newExpense.amount) {
-      addToast({
-        title: "Error",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    const amount = parseFloat(newExpense.amount);
-    if (isNaN(amount) || amount <= 0) {
-      addToast({
-        title: "Error",
-        description: "Please enter a valid amount",
-        variant: "destructive",
-      });
-      return;
-    }
-    
     try {
+      // Validate input
+      if (!newExpense.type || !newExpense.amount) {
+        addToast({
+          title: "Error",
+          description: "Please fill in all required fields",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      const amount = parseFloat(newExpense.amount);
+      if (isNaN(amount) || amount <= 0) {
+        addToast({
+          title: "Error",
+          description: "Please enter a valid positive amount",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       // Prepare the new expense with correct property names
       const newSource = {
         type: newExpense.type,
@@ -314,21 +315,9 @@ const Expenses = () => {
   };
 
   // Function to update an expense
-  const updateExpenseSource = async (id: string, newType: string, newAmount: string, newDate?: string, newColor?: string) => {
+  const updateExpenseSource = async (id: string, newType: string, newAmount: string, newDate: string, newColor: string) => {
     try {
-      console.log("updateExpenseSource called with:", { id, newType, newAmount, newDate, newColor });
-      
-      if (!id) {
-        console.error("Cannot update expense with invalid ID:", id);
-        addToast({
-          title: "Error",
-          description: "Cannot update this expense (invalid ID)",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      if (!newType || !newAmount) {
+      if (!id || !newType || !newAmount) {
         addToast({
           title: "Error",
           description: "Please fill in all fields",
@@ -341,7 +330,7 @@ const Expenses = () => {
       if (isNaN(amount) || amount <= 0) {
         addToast({
           title: "Error",
-          description: "Please enter a valid amount",
+          description: "Please enter a valid positive amount",
           variant: "destructive",
         });
         return;
@@ -363,7 +352,7 @@ const Expenses = () => {
       const updatedSource = {
         type: newType,
         amount: amount,
-        date: newDate || new Date().toISOString(),
+        date: newDate,
         color: newColor
       };
       
@@ -455,7 +444,7 @@ const Expenses = () => {
       if (isNaN(addAmount) || addAmount <= 0) {
         addToast({
           title: "Error",
-          description: "Please enter a valid amount",
+          description: "Please enter a valid positive amount",
           variant: "destructive",
         });
         return;
@@ -527,8 +516,15 @@ const Expenses = () => {
                 <div className="flex flex-col gap-2">
                   <Input
                     type="number"
+                    min="0"
+                    step="0.01"
                     value={quickAddAmount}
-                    onChange={(e) => setQuickAddAmount(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || parseFloat(value) >= 0) {
+                        setQuickAddAmount(value);
+                      }
+                    }}
                     className="w-32 text-black bg-white"
                     placeholder="Enter amount"
                     autoFocus
@@ -581,8 +577,15 @@ const Expenses = () => {
               <div className="flex flex-col sm:flex-row items-center justify-center space-y-2 sm:space-y-0 sm:space-x-2">
                 <Input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '' || parseFloat(value) >= 0) {
+                      setEditAmount(value);
+                    }
+                  }}
                   className="w-full max-w-xs sm:w-32 text-black bg-white"
                 />
                 <Button
@@ -1149,8 +1152,15 @@ const Expenses = () => {
               <Input
                 id="amount"
                 type="number"
+                min="0"
+                step="0.01"
                 value={newExpense.amount}
-                onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || parseFloat(value) >= 0) {
+                    setNewExpense({ ...newExpense, amount: value });
+                  }
+                }}
                 placeholder="Enter amount"
                 className="text-black font-medium"
               />

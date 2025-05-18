@@ -521,8 +521,15 @@ const Income = () => {
               <div className="flex flex-col sm:flex-row items-center justify-center space-y-2 sm:space-y-0 sm:space-x-2">
                 <Input
                   type="number"
+                  min="0"
+                  step="0.01"
                   value={editAmount}
-                  onChange={(e) => setEditAmount(e.target.value)}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '' || parseFloat(value) >= 0) {
+                      setEditAmount(value);
+                    }
+                  }}
                   className="w-full max-w-xs sm:w-32 text-black bg-white"
                 />
                 <Button
@@ -611,8 +618,15 @@ const Income = () => {
                 <div className="flex flex-col gap-2">
                   <Input
                     type="number"
+                    min="0"
+                    step="0.01"
                     value={quickAddAmount}
-                    onChange={(e) => setQuickAddAmount(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || parseFloat(value) >= 0) {
+                        setQuickAddAmount(value);
+                      }
+                    }}
                     className="w-32 text-black bg-white"
                     placeholder="Enter amount"
                     autoFocus
@@ -1207,12 +1221,19 @@ const Income = () => {
               <Input
                 id="amount"
                 type="number"
+                min="0"
+                step="0.01"
                 value={isEditing ? editIncome.amount : newIncome.amount}
-                onChange={(e) =>
-                  isEditing
-                    ? setEditIncome({ ...editIncome, amount: e.target.value })
-                    : setNewIncome({ ...newIncome, amount: e.target.value })
-                }
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || parseFloat(value) >= 0) {
+                    if (isEditing) {
+                      setEditIncome({ ...editIncome, amount: value });
+                    } else {
+                      setNewIncome({ ...newIncome, amount: value });
+                    }
+                  }
+                }}
                 placeholder="Enter amount"
                 className="text-black font-medium"
               />
