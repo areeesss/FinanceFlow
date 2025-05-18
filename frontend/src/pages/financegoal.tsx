@@ -1094,7 +1094,7 @@ const FinanceGoal = () => {
                   Cancel
                 </Button>
                 <Button
-                  className="bg-indigo-900 hover:bg-indigo-700 text-white"
+                  className="mt-2 bg-indigo-500 hover:bg-indigo-600 text-white"
                   onClick={handleAddGoal}
                 >
                   Create Goal
@@ -1608,7 +1608,7 @@ const FinanceGoal = () => {
                 <div className="text-center py-8">
                   <p>No goals found. Create your first financial goal!</p>
                   <Button
-                    className="mt-2 bg-indigo-900 hover:bg-indigo-700"
+                    className="mt-2 bg-indigo-500 hover:bg-indigo-600"
                     onClick={openAddGoalDialog}
                   >
                     <Plus className="w-4 h-4 mr-2" /> Create Goal
