@@ -45,7 +45,7 @@ class Income(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
     def __str__(self):
-        return f"{self.name}: ${self.amount}"
+        return f"{self.name}: ₱{self.amount}"
 
 class Expense(models.Model):
     name = models.CharField(max_length=100)
@@ -56,7 +56,7 @@ class Expense(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
     def __str__(self):
-        return f"{self.name}: ${self.amount}"
+        return f"{self.name}: ₱{self.amount}"
     
 class Savings(models.Model):
     total = models.IntegerField(default=0)
@@ -82,7 +82,7 @@ class Budget(models.Model):
     period = models.CharField(max_length=10, choices=[('daily', 'Daily'), ('weekly', 'Weekly'), ('monthly', 'Monthly')], default='monthly')
 
     def __str__(self):
-        return f"{self.name} (${self.current_amount}/${self.target_amount})"
+        return f"{self.name} (₱{self.current_amount}/₱{self.target_amount})"
 
 class BudgetItem(models.Model):
     budget = models.ForeignKey(Budget, related_name='items', on_delete=models.CASCADE)
@@ -102,7 +102,7 @@ class BudgetItem(models.Model):
         return min(100, (self.actual / self.planned) * 100)
 
     def __str__(self):
-        return f"{self.category} (${self.actual}/${self.planned})"
+        return f"{self.category} (₱{self.actual}/₱{self.planned})"
 
 class Goal(models.Model):
     name = models.CharField(max_length=100)

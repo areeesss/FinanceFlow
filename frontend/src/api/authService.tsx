@@ -84,8 +84,36 @@ export const logout = async (): Promise<void> => {
   } catch (error) {
     console.error('Logout error:', error);
   } finally {
+    // Clear all user data from localStorage
+    
+    // Clear auth tokens
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
+    
+    // Clear all color data
+    localStorage.removeItem('incomeColors');
+    localStorage.removeItem('expenseColors');
+    
+    // Clear goal transactions
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith('goal_transactions_')) {
+        localStorage.removeItem(key);
+      }
+    });
+    
+    // Clear budget data
+    localStorage.removeItem('budget_periods');
+    keys.forEach(key => {
+      if (key.startsWith('budget_items_')) {
+        localStorage.removeItem(key);
+      }
+    });
+    
+    // Clear any other user-specific data
+    localStorage.removeItem('signupToastShown');
+    
+    console.log("Cleared all user data from localStorage during logout");
   }
 };
 
@@ -93,7 +121,7 @@ export const getCurrentUser = async (): Promise<User> => {
   try {
     const response = await apiClient.get('/user/');
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Failed to fetch user');
   }
 };
@@ -102,7 +130,7 @@ export const refreshToken = async (data: RefreshTokenData): Promise<{ access: st
   try {
     const response = await apiClient.post('/token/refresh/', data);
     return response.data;
-  } catch (error) {
+  } catch (_error) {
     throw new Error('Token refresh failed');
   }
 };

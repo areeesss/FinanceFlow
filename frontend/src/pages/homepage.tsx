@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import image from "@/assets/imgs/halfbg.webp";
-import logoname from "@/assets/imgs/logoname.webp";
+import image from "/assets/imgs/halfbg.webp";
+import logoname from "/assets/imgs/logoname.webp";
 
 const App = () => {
   const navigate = useNavigate();
