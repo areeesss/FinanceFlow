@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import api from '../services/api';
+import apiClient from '@/api/apiClient';
 import axios from 'axios';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -114,7 +114,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     // If refresh token exists, try to refresh
     if (refreshToken) {
       try {
-        const response = await axios.post(`${API_URL}/token/refresh/`, {
+        const response = await apiClient.post('/token/refresh/', {
           refresh: refreshToken
         });
         
@@ -143,7 +143,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       
       // Make API request with valid token
-      const response = await api.get('/user/');
+      const response = await apiClient.get('/user/');
       console.log("User data fetched successfully:", response.data);
       return response.data;
     } catch (error: any) {
@@ -158,7 +158,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     mutationFn: async (credentials: { email: string; password: string }) => {
       try {
         console.log("Attempting login with:", credentials);
-        const response = await api.post('/token/', {
+        const response = await apiClient.post('/token/', {
           email: credentials.email,
           password: credentials.password
         });
@@ -195,7 +195,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       password2: string 
     }) => {
       try {
-        const response = await api.post('/register/', userData);
+        const response = await apiClient.post('/register/', userData);
         return response.data;
       } catch (error: any) {
         console.error("Registration error:", error);
@@ -213,8 +213,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       navigate('/login', { 
         state: { 
           signupSuccess: true, 
-          email: variables.email,
-          defaultData: true 
+          email: variables.email
         } 
       });
     },

@@ -23,44 +23,44 @@ export interface Goal extends FinanceItem {
 
 // Income
 export const getIncomes = async (): Promise<FinanceItem[]> => {
-  const response = await apiClient.get('/api/income/');
+  const response = await apiClient.get('/income/');
   return response.data;
 };
 
 export const createIncome = async (data: Omit<FinanceItem, 'id'>): Promise<FinanceItem> => {
-  const response = await apiClient.post('/api/income/', data);
+  const response = await apiClient.post('/income/', data);
   return response.data;
 };
 
 // Expenses
 export const getExpenses = async (): Promise<FinanceItem[]> => {
-  const response = await apiClient.get('/api/expenses/');
+  const response = await apiClient.get('/expenses/');
   return response.data;
 };
 
 export const createExpense = async (data: Omit<FinanceItem, 'id'>): Promise<FinanceItem> => {
-  const response = await apiClient.post('/api/expenses/', data);
+  const response = await apiClient.post('/expenses/', data);
   return response.data;
 };
 
 // Budgets
 export const getBudgets = async (): Promise<Budget[]> => {
-  const response = await apiClient.get('/api/budgets/');
+  const response = await apiClient.get('/budgets/');
   return response.data;
 };
 
 export const createBudget = async (data: Omit<Budget, 'id'>): Promise<Budget> => {
-  const response = await apiClient.post('/api/budgets/', data);
+  const response = await apiClient.post('/budgets/', data);
   return response.data;
 };
 
 // Goals
 export const getGoals = async (): Promise<Goal[]> => {
-  const response = await apiClient.get('/api/goals/');
+  const response = await apiClient.get('/goals/');
   return response.data;
 };
 
 export const createGoal = async (data: Omit<Goal, 'id'>): Promise<Goal> => {
-  const response = await apiClient.post('/api/goals/', data);
+  const response = await apiClient.post('/goals/', data);
   return response.data;
 };

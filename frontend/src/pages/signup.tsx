@@ -45,8 +45,7 @@ const SignUpPage = () => {
       navigate("/login", { 
         state: { 
           signupSuccess: true,
-          email: formData.email,
-          defaultData: true
+          email: formData.email
         } 
       });
     },

@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useState } from 'react';
-import { incomeService, expenseService, goalService, budgetService } from '../services/api';
-import { useAuth } from './AuthContext';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { incomeService, expenseService, goalService, budgetService } from '@/services/api';
+import { useAuth } from '@/context/AuthContext';
 
 // Define types for the financial data
 interface Income {
@@ -117,254 +117,98 @@ const processApiResponse = <T extends unknown>(response: any): T[] => {
   return [];
 };
 
-// Generate test data if no real data exists
-const generateTestData = () => {
-  console.log("Generating test data for development");
-  
-  // Test income data with a variety of colors from the color selector
-  const incomeData = [
-    {
-      id: 'test-income-1',
-      name: 'Salary',
-      type: 'Salary',
-      amount: 5000,
-      date: new Date().toISOString().split('T')[0],
-      description: 'Monthly salary payment',
-      color: '#3B82F6' // Blue
-    },
-    {
-      id: 'test-income-2',
-      name: 'Freelance',
-      type: 'Freelance',
-      amount: 1200,
-      date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      description: 'Website development project',
-      color: '#8B5CF6' // Purple
-    },
-    {
-      id: 'test-income-3',
-      name: 'Investments',
-      type: 'Investments',
-      amount: 800,
-      date: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      description: 'Dividend payments',
-      color: '#10B981' // Green
-    }
-  ];
-  
-  // Test expense data with a variety of colors from the color selector
-  const expensesData = [
-    {
-      id: 'test-expense-1',
-      name: 'Rent',
-      type: 'Housing',
-      amount: 1500,
-      date: new Date().toISOString().split('T')[0],
-      description: 'Monthly apartment rent',
-      color: '#EF4444' // Red
-    },
-    {
-      id: 'test-expense-2',
-      name: 'Groceries',
-      type: 'Food',
-      amount: 350,
-      date: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      description: 'Weekly grocery shopping',
-      color: '#F59E0B' // Amber/Orange
-    },
-    {
-      id: 'test-expense-3',
-      name: 'Transportation',
-      type: 'Transportation',
-      amount: 250,
-      date: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      description: 'Car payment and gas',
-      color: '#6366F1' // Indigo
-    }
-  ];
-  
-  // Test goal data
-  const goalsData = [
-    {
-      id: 'test-goal-1',
-      name: 'Emergency Fund',
-      targetAmount: 10000,
-      amountSaved: 6500,
-      current_amount: 6500,
-      target_amount: 10000,
-      deadline: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      description: 'Three months of expenses for emergencies',
-      color: '#0EA5E9' // Light Blue
-    },
-    {
-      id: 'test-goal-2',
-      name: 'New Car',
-      targetAmount: 25000,
-      amountSaved: 12000,
-      current_amount: 12000,
-      target_amount: 25000,
-      deadline: new Date(Date.now() + 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      description: 'Saving for a new car',
-      color: '#EC4899' // Pink
-    }
-  ];
-  
-  // Test budget data with nice colors
-  const budgetsData = [
-    {
-      id: 'test-budget-1',
-      name: 'Monthly Budget',
-      period: 'monthly',
-      totalPlanned: 3000,
-      totalActual: 2800,
-      target_amount: 3000,
-      current_amount: 2800,
-      startDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      endDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      items: [
-        {
-          id: 'test-budget-item-1',
-          category: 'Housing',
-          planned: 1500,
-          actual: 1500,
-          remaining: 0,
-          progress: 100,
-          color: '#3B82F6' // Blue
-        },
-        {
-          id: 'test-budget-item-2',
-          category: 'Food',
-          planned: 500,
-          actual: 350,
-          remaining: 150,
-          progress: 70,
-          color: '#F59E0B' // Amber/Orange
-        },
-        {
-          id: 'test-budget-item-3',
-          category: 'Transportation',
-          planned: 300,
-          actual: 250,
-          remaining: 50,
-          progress: 83,
-          color: '#10B981' // Green
-        }
-      ]
-    }
-  ];
-  
-  return {
-    incomeData,
-    expensesData,
-    goalsData,
-    budgetsData
-  };
-};
-
 // Provider Component
 export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   // Fetch income data using React Query
   const { 
-    data: income = [], 
+    data: incomeData = [], 
     isLoading: incomeLoading,
     error: incomeError
   } = useQuery({
     queryKey: ['income'],
     queryFn: async () => {
       try {
-        console.log("Fetching income data...");
         const response = await incomeService.getAll();
-        console.log("Income data fetched:", response);
         return processApiResponse<Income>(response);
       } catch (error) {
         console.error("Error fetching income:", error);
         throw error;
       }
     },
-    enabled: !!user, // Only run if user is logged in
+    enabled: !!user,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Fetch expenses data using React Query
   const { 
-    data: expenses = [], 
+    data: expensesData = [], 
     isLoading: expensesLoading,
     error: expensesError
   } = useQuery({
     queryKey: ['expenses'],
     queryFn: async () => {
       try {
-        console.log("Fetching expenses data...");
         const response = await expenseService.getAll();
-        console.log("Expenses data fetched:", response);
         return processApiResponse<Expense>(response);
       } catch (error) {
         console.error("Error fetching expenses:", error);
         throw error;
       }
     },
-    enabled: !!user, // Only run if user is logged in
+    enabled: !!user,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Fetch goals data using React Query
   const { 
-    data: goals = [], 
+    data: goalsData = [], 
     isLoading: goalsLoading,
     error: goalsError
   } = useQuery({
     queryKey: ['goals'],
     queryFn: async () => {
       try {
-        console.log("Fetching goals data...");
         const response = await goalService.getAll();
-        console.log("Goals data fetched:", response);
         return processApiResponse<Goal>(response);
       } catch (error) {
         console.error("Error fetching goals:", error);
         throw error;
       }
     },
-    enabled: !!user, // Only run if user is logged in
+    enabled: !!user,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Fetch budgets data using React Query
   const { 
-    data: budgets = [], 
+    data: budgetsData = [], 
     isLoading: budgetsLoading,
     error: budgetsError
   } = useQuery({
     queryKey: ['budgets'],
     queryFn: async () => {
       try {
-        console.log("Fetching budgets data...");
         const response = await budgetService.getAll();
-        console.log("Budgets data fetched:", response);
         return processApiResponse<Budget>(response);
       } catch (error) {
         console.error("Error fetching budgets:", error);
         throw error;
       }
     },
-    enabled: !!user, // Only run if user is logged in
+    enabled: !!user,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // If there's no data from the API, use test data for development
-  const isEmptyData = 
-    income.length === 0 && 
-    expenses.length === 0 && 
-    goals.length === 0 && 
-    budgets.length === 0;
-
-  const finalData = isEmptyData && !incomeLoading && !expensesLoading && !goalsLoading && !budgetsLoading
-    ? generateTestData()
-    : { incomeData: income, expensesData: expenses, goalsData: goals, budgetsData: budgets };
+  const finalData = {
+    incomeData,
+    expensesData,
+    goalsData,
+    budgetsData
+  };
 
   // Refresh data function for manual refreshes
   const refreshData = async () => {

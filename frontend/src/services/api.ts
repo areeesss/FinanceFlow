@@ -1,108 +1,8 @@
-import axios from 'axios';
+import apiClient from '@/api/apiClient';
 
-// Update the API_URL to use an environment variable with a fallback
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-// Create axios instance with default config
-const api = axios.create({
-  baseURL: `${API_URL}/api`,  // Add /api prefix to match backend URL structure
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 10000, // 10 second timeout
-});
-
-// Add request interceptor to include token in every request
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("access_token");
-    
-    // Log the request details
-    console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`);
-    
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-      console.log('Authorization header added to request');
-    } else {
-      console.log('No token found in localStorage, request will be sent without Authorization header');
-    }
-    
-    return config;
-  },
-  (error) => {
-    console.error('Request interceptor error:', error);
-    return Promise.reject(error);
-  }
-);
-
-// Update response interceptor with improved error handling
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-    
-    // Don't attempt refresh for auth endpoints or if already retried
-    const isAuthEndpoint = 
-      originalRequest.url?.includes('/token/') || 
-      originalRequest.url?.includes('/login/') || 
-      originalRequest.url?.includes('/register/');
-    
-    // If the error is due to an unauthorized request (401) and we haven't tried refreshing yet
-    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
-      originalRequest._retry = true;
-      
-      try {
-        console.log("Attempting to refresh token");
-        
-        // Try to refresh the token
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (!refreshToken) {
-          console.log("No refresh token found");
-          // No refresh token, redirect to login
-          if (!window.location.pathname.includes('/login')) {
-            window.location.href = '/login';
-          }
-          throw new Error("No refresh token found");
-        }
-
-        // Make a direct axios call to avoid the interceptor loop
-        const response = await axios.post(`${API_URL}/api/token/refresh/`, {
-          refresh: refreshToken
-        });
-        
-        if (response.data && response.data.access) {
-          console.log("Token refreshed successfully");
-          // Update the token in localStorage
-          localStorage.setItem('access_token', response.data.access);
-          
-          // Update the authorization header for the original request
-          originalRequest.headers.Authorization = `Bearer ${response.data.access}`;
-          
-          // Retry the original request with the new token
-          return axios(originalRequest);
-        } else {
-          console.log("Token refresh response did not contain access token");
-          throw new Error("Invalid refresh response");
-        }
-      } catch (refreshError: any) {
-        console.error('Error refreshing token:', refreshError);
-        console.error('Error details:', refreshError.response ? refreshError.response.data : 'No response data');
-        
-        // Clear tokens if refresh fails
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        
-        // Only redirect if not already on login page
-        if (!window.location.pathname.includes('/login')) {
-          console.log("Redirecting to login page due to token refresh failure");
-          window.location.href = '/login';
-        }
-      }
-    }
-    
-    return Promise.reject(error);
-  }
-);
+// Remove the API_URL and axios instance creation since we're using apiClient
+// const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// const api = axios.create({ ... });
 
 // Default color utilities
 // Using colors from the color selector that mesh well together
@@ -154,7 +54,7 @@ const getDefaultExpenseColor = (): string => {
 
 // Income related API calls
 export const incomeService = {
-  getAll: () => api.get('/income/'),
+  getAll: () => apiClient.get('/income/'),
   create: async (data: any) => {
     // Standardize data format for backend compatibility
     const formattedData = {
@@ -162,15 +62,13 @@ export const incomeService = {
       amount: data.amount || 0,
       description: data.description || `Income from ${data.type || 'unknown source'}`,
       date: data.date || new Date().toISOString().split('T')[0],
-      // Add name field as required by Django backend
       name: data.name || data.type || 'Unnamed Income',
-      // Include color if provided, or use the default blue shade based on count
       color: data.color || getDefaultIncomeColor()
     };
     
     console.log('Creating income with data:', formattedData);
     try {
-      const response = await api.post('/income/', formattedData);
+      const response = await apiClient.post('/income/', formattedData);
       return response;
     } catch (error: any) {
       console.error('Error details:', error);
@@ -205,7 +103,7 @@ export const incomeService = {
     console.log('Original request data:', data);
     
     try {
-      const response = await api.put(`/income/${stringId}/`, formattedData);
+      const response = await apiClient.put(`/income/${stringId}/`, formattedData);
       console.log('Backend response to update:', response.data);
       return response;
     } catch (error: any) {
@@ -223,7 +121,7 @@ export const incomeService = {
     console.log(`Deleting income with ID: ${stringId} (original type: ${typeof id})`);
     
     try {
-      const response = await api.delete(`/income/${stringId}/`);
+      const response = await apiClient.delete(`/income/${stringId}/`);
       return response;
     } catch (error: any) {
       console.error('Error deleting income:', error);
@@ -238,7 +136,7 @@ export const incomeService = {
 
 // Expenses related API calls
 export const expenseService = {
-  getAll: () => api.get('/expenses/'),
+  getAll: () => apiClient.get('/expenses/'),
   create: async (data: any) => {
     // Standardize data format for backend compatibility
     const formattedData = {
@@ -254,7 +152,7 @@ export const expenseService = {
     
     console.log('Creating expense with data:', formattedData);
     try {
-      const response = await api.post('/expenses/', formattedData);
+      const response = await apiClient.post('/expenses/', formattedData);
       return response;
     } catch (error: any) {
       console.error('Error details:', error);
@@ -288,7 +186,7 @@ export const expenseService = {
     console.log('Updating expense with data:', formattedData);
     
     try {
-      const response = await api.put(`/expenses/${stringId}/`, formattedData);
+      const response = await apiClient.put(`/expenses/${stringId}/`, formattedData);
       return response;
     } catch (error: any) {
       console.error('Error updating expense:', error);
@@ -305,7 +203,7 @@ export const expenseService = {
     console.log(`Deleting expense with ID: ${stringId} (original type: ${typeof id})`);
     
     try {
-      const response = await api.delete(`/expenses/${stringId}/`);
+      const response = await apiClient.delete(`/expenses/${stringId}/`);
       return response;
     } catch (error: any) {
       console.error('Error deleting expense:', error);
@@ -320,21 +218,21 @@ export const expenseService = {
 
 // Goals related API calls
 export const goalService = {
-  getAll: () => api.get('/goals/'),
+  getAll: () => apiClient.get('/goals/'),
   create: (data: any) => {
     console.log('Creating goal with data:', data);
-    return api.post('/goals/', data);
+    return apiClient.post('/goals/', data);
   },
   update: (id: string, data: any) => {
     console.log(`Updating goal with ID: ${id}`, data);
-    return api.put(`/goals/${id}/`, data);
+    return apiClient.put(`/goals/${id}/`, data);
   },
-  delete: (id: string) => api.delete(`/goals/${id}/`),
+  delete: (id: string) => apiClient.delete(`/goals/${id}/`),
 };
 
 // Budget related API calls
 export const budgetService = {
-  getAll: () => api.get('/budgets/'),
+  getAll: () => apiClient.get('/budgets/'),
   create: (data: any) => {
     // Convert frontend model to backend model
     const formattedData = {
@@ -349,7 +247,7 @@ export const budgetService = {
     };
     
     console.log('Creating budget with data:', formattedData);
-    return api.post('/budgets/', formattedData);
+    return apiClient.post('/budgets/', formattedData);
   },
   update: async (id: number, data: any) => {
     // Convert frontend model to backend model
@@ -371,7 +269,7 @@ export const budgetService = {
     console.log(`Updating budget with ID: ${id}`, formattedData);
     
     try {
-      const response = await api.put(`/budgets/${id}/`, formattedData);
+      const response = await apiClient.put(`/budgets/${id}/`, formattedData);
       console.log(`Budget update successful for ID: ${id}`, response.data);
       return response;
     } catch (error: any) {
@@ -392,7 +290,7 @@ export const budgetService = {
     console.log(`Updating items for budget ID: ${id}`, items);
     
     try {
-      const response = await api.put(`/budgets/${id}/`, { items });
+      const response = await apiClient.put(`/budgets/${id}/`, { items });
       console.log(`Budget items update successful for ID: ${id}`, response.data);
       return response;
     } catch (error: any) {
@@ -408,14 +306,14 @@ export const budgetService = {
       throw error;
     }
   },
-  delete: (id: number) => api.delete(`/budgets/${id}/`),
+  delete: (id: number) => apiClient.delete(`/budgets/${id}/`),
 };
 
 // User related API calls
 export const userService = {
-  getProfile: () => api.get('/user/'),
-  updateProfile: (data: any) => api.put('/user/profile/', data),
-  updateSettings: (data: any) => api.put('/user/settings/', data),
+  getProfile: () => apiClient.get('/user/'),
+  updateProfile: (data: any) => apiClient.put('/user/profile/', data),
+  updateSettings: (data: any) => apiClient.put('/user/settings/', data),
 };
 
 // Add a test function to see what the API expects
@@ -423,7 +321,7 @@ export const testAPI = {
   getIncome: async () => {
     try {
       console.log('Fetching income data...');
-      const response = await api.get('/income/');
+      const response = await apiClient.get('/income/');
       console.log('GET income full response:', response);
       console.log('GET income response data type:', typeof response.data);
       console.log('GET income response status:', response.status);
@@ -460,7 +358,7 @@ export const testAPI = {
       };
       
       console.log('Attempting to create income with:', testData);
-      const response = await api.post('/income/', testData);
+      const response = await apiClient.post('/income/', testData);
       console.log('POST income response:', response.data);
       return response.data;
     } catch (error: any) {
@@ -476,7 +374,7 @@ export const testAPI = {
   getExpenses: async () => {
     try {
       console.log('Fetching expense data...');
-      const response = await api.get('/expenses/');
+      const response = await apiClient.get('/expenses/');
       console.log('GET expenses response structure:', JSON.stringify(response.data, null, 2));
       // Analyze the structure to determine required fields
       if (Array.isArray(response.data) && response.data.length > 0) {
@@ -497,4 +395,4 @@ export const testAPI = {
   }
 };
 
-export default api; 
+export default apiClient; 

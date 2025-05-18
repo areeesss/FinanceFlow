@@ -66,11 +66,7 @@ const Login = () => {
     if (location.state?.signupSuccess && !toastShown && !hasShownSignupToast) {
       addToast({
         title: "Registration Successful",
-        description: `Account created for ${location.state.email}. Please log in.${
-          location.state.defaultData 
-            ? ' Default financial data has been created for your account including income, expenses, budgets, and a goal.' 
-            : ''
-        }`,
+        description: `Account created for ${location.state.email}. Please log in to start managing your finances.`,
       });
       
       // Set both local state and localStorage flag to prevent showing the toast again
