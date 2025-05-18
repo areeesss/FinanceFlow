@@ -731,11 +731,7 @@ const BudgetPage = () => {
               </Tabs>
               <Button
                 onClick={() => {
-                  // Pre-set the period based on the active tab
                   setNewBudgetPeriod(activePeriod as "daily" | "weekly" | "monthly");
-                  console.log("Setting budget period to:", activePeriod);
-                  
-                  // Set default dates based on period
                   const today = new Date();
                   setNewBudgetStartDate(today.toISOString().split('T')[0]);
                   
@@ -743,10 +739,8 @@ const BudgetPage = () => {
                   if (activePeriod === "daily") {
                     // Same day for daily budget
                   } else if (activePeriod === "weekly") {
-                    // Add 6 days for a 7-day period
                     endDate.setDate(today.getDate() + 6);
                   } else {
-                    // Add 1 month for monthly budget
                     endDate.setMonth(today.getMonth() + 1);
                     endDate.setDate(endDate.getDate() - 1);
                   }
@@ -754,7 +748,7 @@ const BudgetPage = () => {
                   setNewBudgetEndDate(endDate.toISOString().split('T')[0]);
                   setNewBudgetDialogOpen(true);
                 }}
-                className="bg-indigo-500 hover:bg-indigo-600 text-white whitespace-nowrap"
+                className="bg-indigo-500 hover:bg-indigo-600 text-white"
                 disabled={mutations.create.isPending}
               >
                 {mutations.create.isPending ? (

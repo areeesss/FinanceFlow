@@ -1094,7 +1094,7 @@ const FinanceGoal = () => {
                   Cancel
                 </Button>
                 <Button
-                  className="mt-2 bg-indigo-500 hover:bg-indigo-600 text-white"
+                  className="bg-indigo-500 hover:bg-indigo-600 text-white"
                   onClick={handleAddGoal}
                 >
                   Create Goal
