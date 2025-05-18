@@ -108,13 +108,13 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://financeflow-cgn.vercel.app",      # Your current Vercel domain
+    "https://financeflow-cgn.vercel.app",      # Your previous Vercel domain
+    "https://financeflow-h3zik65k1-areeesss-projects.vercel.app",  # Your new Vercel domain
 ]
 
 CORS_ALLOW_CREDENTIALS = True  # Important for withCredentials
@@ -181,3 +181,9 @@ SIMPLE_JWT = {
 if not DEBUG:
     # Enable WhiteNoise for serving static files in production
     MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_TRUSTED_ORIGINS = [
+        'https://financeflow-cgn.vercel.app',
+        'https://financeflow-h3zik65k1-areeesss-projects.vercel.app',
+    ]
