@@ -1,10 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import apiClient from '@/api/apiClient';
-import axios from 'axios';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-
-const API_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : 'http://localhost:8000/api';
+import apiClient from '@/api/apiClient';
 
 // Define the User interface
 interface User {
@@ -38,7 +35,6 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const location = useLocation();
 
   // Get tokens from localStorage
   const getStoredToken = (): string | null => localStorage.getItem('access_token');

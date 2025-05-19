@@ -451,7 +451,7 @@ const Expenses = () => {
       }
       
       const newAmount = amount + addAmount;
-      updateExpenseSource(id, title, newAmount.toString(), date, color);
+      updateExpenseSource(id, title, newAmount.toString(), date || new Date().toISOString().split('T')[0], color);
       setIsQuickEditing(false);
       setQuickAddAmount('');
     };
@@ -461,7 +461,7 @@ const Expenses = () => {
       console.log("Attempting to delete expense with ID:", id);
       
       // First check if ID is valid
-      if (!id) {
+      if (typeof id !== 'string') {
         console.error("Cannot delete expense with invalid ID:", id);
         addToast({
           title: "Error",
