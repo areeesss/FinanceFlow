@@ -141,19 +141,51 @@ export function useBudgets(initialPeriod: "daily" | "weekly" | "monthly" = "dail
     enabled: !!user, // Only run if user is logged in
   });
 
-  // Map backend budgets to frontend format when they change
+  // Effect to map backend data and update localBudgets
   useEffect(() => {
     if (budgetsData && Array.isArray(budgetsData)) {
       console.log("Raw budgets data from backend:", budgetsData);
       const mappedBudgets = budgetsData.map(mapBackendToFrontend);
       setLocalBudgets(mappedBudgets);
-      
-      // Set the current budget ID if not set yet
-      if (mappedBudgets.length > 0 && !currentBudgetId) {
-        setCurrentBudgetId(mappedBudgets[0].id);
-      }
     }
-  }, [budgetsData, currentBudgetId]);
+  }, [budgetsData]); // Depend only on budgetsData changing
+
+  // Filter budgets by period type
+  const filteredBudgets = useMemo(() => {
+    return localBudgets.filter(budget => budget.period === activePeriod);
+  }, [localBudgets, activePeriod]); // Depend on localBudgets and activePeriod
+
+  // Effect to update currentBudgetId when localBudgets or activePeriod changes
+  // This logic determines which budget should be selected based on the current state.
+  useEffect(() => {
+    let nextBudgetId: number | null = null;
+
+    // Find the first budget in the filtered list for the current active period
+    const firstBudgetInActivePeriod = filteredBudgets.length > 0 ? filteredBudgets[0].id : null;
+
+    // Determine the next currentBudgetId:
+    // 1. If the current currentBudgetId exists in the filtered list, keep it.
+    // 2. Otherwise, if there's a first budget in the active period, select that.
+    // 3. Otherwise (filtered list is empty), set to null.
+
+    const currentBudgetExistsInFiltered = currentBudgetId !== null && filteredBudgets.some(budget => budget.id === currentBudgetId);
+
+    if (currentBudgetExistsInFiltered) {
+      nextBudgetId = currentBudgetId;
+    } else if (firstBudgetInActivePeriod !== null) {
+      nextBudgetId = firstBudgetInActivePeriod;
+    } else {
+      nextBudgetId = null;
+    }
+
+    // Only update state if the calculated nextBudgetId is different from the current one.
+    // This check is crucial to prevent infinite loops.
+    if (nextBudgetId !== currentBudgetId) {
+      setCurrentBudgetId(nextBudgetId);
+    }
+
+  }, [localBudgets, activePeriod]); // Dependencies: localBudgets and activePeriod
+  // Note: We intentionally exclude currentBudgetId from dependencies to prevent infinite loops.
 
   // Create budget mutation
   const createBudgetMutation = useMutation({
@@ -278,6 +310,8 @@ export function useBudgets(initialPeriod: "daily" | "weekly" | "monthly" = "dail
     };
     
     const updatedItems = [...budget.items, newItem];
+
+    // Recalculate totalPlanned and totalActual based on updated items
     const totalPlanned = updatedItems.reduce(
       (sum, item) => sum + item.planned,
       0
@@ -286,17 +320,26 @@ export function useBudgets(initialPeriod: "daily" | "weekly" | "monthly" = "dail
       (sum, item) => sum + item.actual,
       0
     );
-    
-    const updatedBudget = { 
-      ...budget,
-      items: updatedItems,
-      totalPlanned,
-      totalActual
+
+    // Construct the update payload similar to deleteBudgetItem
+    const dataForUpdate = {
+      ...budget, // Spread existing budget data
+      items: updatedItems, // Include the updated items array
+      target_amount: totalPlanned, // Include totalPlanned (backend's target_amount)
+      current_amount: totalActual, // Include totalActual (backend's current_amount)
+      // Ensure backend field names are used for dates if they were part of the spread and needed
+      start_date: budget.startDate, // Explicitly include with backend name
+      end_date: budget.endDate,   // Explicitly include with backend name
+      id: budget.id, // Ensure ID is included
+      name: budget.name, // Ensure name is included
+      period: budget.period, // Ensure period is included
     };
-    
-    return updateBudgetMutation.mutateAsync({ 
-      id: budgetId, 
-      data: updatedBudget 
+
+    console.log("Data being sent to updateBudgetMutation:", dataForUpdate);
+
+    return updateBudgetMutation.mutateAsync({
+      id: budgetId,
+      data: dataForUpdate, // Send the constructed data
     });
   };
 
@@ -412,21 +455,28 @@ export function useBudgets(initialPeriod: "daily" | "weekly" | "monthly" = "dail
       }
       return item;
     });
-    
+
+    // Recalculate totalActual and include totalPlanned to send to backend (required)
     const totalActual = updatedItems.reduce(
       (sum, item) => sum + item.actual,
       0
     );
-    
-    const updatedBudget = { 
-      ...budget,
-      items: updatedItems,
-      totalActual
+    const totalPlanned = budget.totalPlanned; // Get existing totalPlanned
+
+    const dataForUpdate = {
+      id: budget.id, // Include ID for the backend endpoint
+      name: budget.name, // Include name
+      period: budget.period, // Include period
+      start_date: budget.startDate, // Include dates, using backend field name
+      end_date: budget.endDate,   // Include dates, using backend field name
+      items: updatedItems, // Send the updated items array
+      target_amount: totalPlanned, // Include totalPlanned (backend's target_amount)
+      current_amount: totalActual, // Include totalActual (backend's current_amount)
     };
-    
-    return updateBudgetMutation.mutateAsync({ 
-      id: budgetId, 
-      data: updatedBudget 
+
+    return updateBudgetMutation.mutateAsync({
+      id: budgetId,
+      data: dataForUpdate, // Send the cleaned data
     });
   };
 
@@ -445,11 +495,6 @@ export function useBudgets(initialPeriod: "daily" | "weekly" | "monthly" = "dail
       return { status: "Good", color: "green" };
     }
   };
-
-  // Filter budgets by period type
-  const filteredBudgets = useMemo(() => {
-    return localBudgets.filter(budget => budget.period === activePeriod);
-  }, [localBudgets, activePeriod]);
 
   // Get current budget
   const currentBudget = useMemo(() => {

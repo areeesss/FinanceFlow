@@ -1206,6 +1206,7 @@ const BudgetPage = () => {
                 type="date"
                 value={newBudgetStartDate}
                 onChange={(e) => setNewBudgetStartDate(e.target.value)}
+                min={new Date().toISOString().split('T')[0]}
               />
             </div>
             <div className="space-y-2">
@@ -1215,6 +1216,7 @@ const BudgetPage = () => {
                 type="date"
                 value={newBudgetEndDate}
                 onChange={(e) => setNewBudgetEndDate(e.target.value)}
+                min={newBudgetStartDate}
               />
               <div className="text-xs text-muted-foreground">
                 End date is calculated based on the period selected.

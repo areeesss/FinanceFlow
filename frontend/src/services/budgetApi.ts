@@ -6,13 +6,12 @@ export const budgetService = {
   create: async (data: any) => {
     const formattedData = {
       name: data.name,
-      target_amount: data.totalPlanned || data.target_amount || 0,
-      current_amount: data.totalActual || data.current_amount || 0,
-      start_date: data.startDate || data.start_date || new Date().toISOString().split('T')[0],
-      end_date: data.endDate || data.end_date || new Date().toISOString().split('T')[0],
-      description: data.description || `Budget for ${data.name}`,
-      period: data.period || 'monthly',
-      items: data.items || []
+      period: data.period,
+      start_date: data.startDate,
+      end_date: data.endDate,
+      target_amount: data.totalPlanned,
+      current_amount: data.totalActual,
+      items: [],
     };
     
     try {
@@ -28,8 +27,30 @@ export const budgetService = {
   },
 
   update: async (id: number, data: any) => {
-    const response = await apiClient.put(`/budgets/${id.toString()}/`, data);
-    return response.data;
+    // Assume the data object passed from the hook is already correctly formatted
+    // with backend expected field names (target_amount, current_amount, start_date, end_date, items)
+    const updatePayload = data;
+
+    // Filter out undefined values before sending (optional but good practice)
+    const filteredPayload: any = Object.fromEntries(
+      Object.entries(updatePayload).filter(([_, value]) => value !== undefined)
+    );
+
+    try {
+      // Send the prepared and filtered payload directly
+      const response = await apiClient.put(`/budgets/${id.toString()}/`, filteredPayload);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error updating budget:', error);
+      if (error.response) {
+        console.error('Server response:', error.response.status, error.response.data);
+        // Re-throw the error to be caught by the calling mutation/query
+        throw new Error(error.response.data.detail || error.message);
+      } else {
+        // Re-throw generic error
+        throw new Error(error.message);
+      }
+    }
   },
 
   delete: async (id: number) => {

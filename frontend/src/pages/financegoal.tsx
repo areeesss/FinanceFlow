@@ -1086,6 +1086,7 @@ const FinanceGoal = () => {
                     type="date"
                     value={newGoalDeadline}
                     onChange={(e) => setNewGoalDeadline(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
                   />
                 </div>
               </div>
@@ -1160,6 +1161,7 @@ const FinanceGoal = () => {
                     type="date"
                     value={newGoalDeadline}
                     onChange={(e) => setNewGoalDeadline(e.target.value)}
+                    min={new Date().toISOString().split('T')[0]}
                   />
                 </div>
                 {currentGoal && (
