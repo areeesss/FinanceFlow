@@ -199,6 +199,7 @@ const SignUpPage = () => {
                     placeholder="Enter password"
                     value={formData.password}
                     onChange={handleChange}
+                    autoComplete="new-password"
                   />
                   {showPassword ? (
                     <EyeOff
@@ -225,6 +226,7 @@ const SignUpPage = () => {
                     placeholder="Confirm password"
                     value={formData.password2}
                     onChange={handleChange}
+                    autoComplete="new-password"
                   />
                   {showPassword ? (
                     <EyeOff
